@@ -75,9 +75,6 @@ export class PointCloud {
     if (hits.length === 0) return;
     const segments = this.ring.reserve(hits.length);
     let hi = 0;
-    this.posAttr.clearUpdateRanges();
-    this.distAttr.clearUpdateRanges();
-    this.birthAttr.clearUpdateRanges();
     for (const seg of segments) {
       for (let i = 0; i < seg.length; i++) {
         const slot = seg.start + i;
