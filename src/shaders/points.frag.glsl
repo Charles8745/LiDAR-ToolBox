@@ -9,7 +9,9 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  float soft = smoothstep(0.5, 0.1, d);
+  // Mostly-opaque round dot with a thin anti-aliased rim, so colors read
+  // as a crisp point cloud rather than additively blowing out to white.
+  float soft = smoothstep(0.5, 0.38, d);
 
   vec3 col = texture2D(uRamp, vec2(vDist01, 0.5)).rgb;
   float alpha = soft;

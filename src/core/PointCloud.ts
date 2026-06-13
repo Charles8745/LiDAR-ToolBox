@@ -58,8 +58,8 @@ export class PointCloud {
       vertexShader,
       fragmentShader,
       transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      depthWrite: true,
+      blending: THREE.NormalBlending,
     });
 
     this.points = new THREE.Points(this.geometry, this.material);
