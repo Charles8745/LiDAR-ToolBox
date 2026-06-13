@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LiDAR Engine — Basic Example</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: crosshair; }
+      #view { display: block; width: 100vw; height: 100vh; }
+      .hud { position: fixed; top: 0; left: 0; right: 0; padding: 12px 16px; pointer-events: none;
+        color: #9ff0dd; text-shadow: 0 0 8px rgba(0,0,0,.9); }
+      .hud h1 { margin: 0; font-size: 13px; }
+      .hud p { margin: 4px 0 0; font-size: 11px; color: #5a7a78; }
+      .panel { position: fixed; bottom: 14px; left: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+      .panel button { pointer-events: auto; background: #0e1622; color: #9ff0dd;
+        border: 1px solid #223247; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+      .panel button:hover { border-color: #2f7d6b; }
+      .stats { position: fixed; bottom: 14px; right: 16px; color: #6b8a88; font-size: 11px; text-align: right; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div class="hud">
+      <h1>LiDAR Engine — basic example</h1>
+      <p>Move mouse = scan · Drag = look around · Space = clear</p>
+    </div>
+    <div class="panel">
+      <button data-ramp="rainbowDepth">Rainbow</button>
+      <button data-ramp="thermal">Thermal</button>
+      <button data-ramp="monoNeon">Neon</button>
+      <button data-emitter="cursorCone">Cone</button>
+      <button data-emitter="pulseRing">Pulse</button>
+      <button data-persistence="accumulate">Accumulate</button>
+      <button data-persistence="fade">Fade</button>
+      <button data-action="clear">Clear</button>
+    </div>
+    <div class="stats" id="stats">0 points</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
