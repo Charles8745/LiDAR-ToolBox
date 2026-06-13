@@ -9,7 +9,14 @@ import type { Ray, Hit } from './types';
 (THREE.BufferGeometry.prototype as any).disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-/** Casts rays against a set of meshes using three-mesh-bvh and returns nearest hits. */
+/**
+ * Casts rays against a set of meshes using three-mesh-bvh and returns nearest hits.
+ *
+ * Note: the constructor mutates the passed meshes — it builds a BVH on each geometry
+ * and forces material.side = DoubleSide (so surfaces are detected regardless of winding).
+ * Scannable meshes are raycast-only in this engine, so this is safe; do not also render
+ * the same mesh instances elsewhere expecting their original side.
+ */
 export class RaycastSampler {
   private raycaster = new THREE.Raycaster();
   private objects: THREE.Object3D[];
@@ -28,7 +35,7 @@ export class RaycastSampler {
           // Force DoubleSide so the BVH-backed raycast never culls backfaces.
           const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const mat of materials) {
-            mat.side = THREE.DoubleSide;
+            if (mat) mat.side = THREE.DoubleSide;
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (mesh.geometry as any).computeBoundsTree();

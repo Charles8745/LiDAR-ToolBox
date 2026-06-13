@@ -51,4 +51,18 @@ describe('RingBuffer', () => {
   it('throws on non-positive capacity', () => {
     expect(() => new RingBuffer(0)).toThrow();
   });
+
+  it('reserve with negative n is a no-op', () => {
+    const rb = new RingBuffer(10);
+    expect(rb.reserve(-5)).toEqual([]);
+    expect(rb.count).toBe(0);
+  });
+
+  it('reserve exactly capacity fills the buffer from 0', () => {
+    const rb = new RingBuffer(10);
+    rb.reserve(4); // head = 4
+    expect(rb.reserve(10)).toEqual([{ start: 0, length: 10 }]);
+    expect(rb.writeHead).toBe(0);
+    expect(rb.count).toBe(10);
+  });
 });

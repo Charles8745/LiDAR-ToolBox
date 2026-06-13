@@ -13,6 +13,7 @@ function makeTexture(data: Uint8Array<ArrayBuffer>, width: number): THREE.DataTe
 
 /** Build a 1×width RGBA LUT texture from a gradient stop list. */
 export function buildRampTexture(stops: ColorStop[], width = 256): THREE.DataTexture {
+  if (width < 2) throw new Error('ramp texture width must be >= 2');
   const data = new Uint8Array(new ArrayBuffer(width * 4));
   for (let i = 0; i < width; i++) {
     const [r, g, b] = sampleGradient(stops, i / (width - 1));
@@ -26,6 +27,7 @@ export function buildRampTexture(stops: ColorStop[], width = 256): THREE.DataTex
 
 /** Build a 1×width RGBA LUT texture by sampling a user function over [0,1]. */
 export function buildRampTextureFromFn(fn: (dist01: number) => RGB, width = 256): THREE.DataTexture {
+  if (width < 2) throw new Error('ramp texture width must be >= 2');
   const data = new Uint8Array(new ArrayBuffer(width * 4));
   for (let i = 0; i < width; i++) {
     const [r, g, b] = fn(i / (width - 1));

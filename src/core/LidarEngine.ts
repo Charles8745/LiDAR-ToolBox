@@ -39,6 +39,8 @@ export class LidarEngine {
   private time = 0;
   private running = false;
   private rafId = 0;
+  private ownedRamp: THREE.Texture | null = null;
+  private disposed = false;
 
   // reused scratch vectors (avoid per-frame allocation)
   private fwd = new THREE.Vector3();
@@ -55,9 +57,11 @@ export class LidarEngine {
     this.camera.position.set(0, 0, 0);
 
     this.sampler = new RaycastSampler(opts.scannable.objects);
+    const rampTex = resolveRamp(opts.ramp);
+    this.ownedRamp = opts.ramp === undefined || typeof opts.ramp === 'function' ? rampTex : null;
     this.pointCloud = new PointCloud({
       capacity: opts.pointBudget ?? 500_000,
-      ramp: resolveRamp(opts.ramp),
+      ramp: rampTex,
       persistence: opts.persistence ?? 'accumulate',
       maxDistance: opts.maxDistance,
       pointSize: opts.pointSize,
@@ -82,6 +86,7 @@ export class LidarEngine {
   }
 
   start(): void {
+    if (this.disposed) return;
     if (this.running) return;
     this.running = true;
     this.clock.start();
@@ -147,7 +152,10 @@ export class LidarEngine {
   }
 
   setRamp(ramp: ColorRamp): void {
-    this.pointCloud.setRamp(resolveRamp(ramp));
+    const tex = resolveRamp(ramp);
+    if (this.ownedRamp && this.ownedRamp !== tex) this.ownedRamp.dispose();
+    this.ownedRamp = typeof ramp === 'function' ? tex : null;
+    this.pointCloud.setRamp(tex);
   }
 
   setEmitter(emitter: Emitter): void {
@@ -171,10 +179,12 @@ export class LidarEngine {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.running = false;
     cancelAnimationFrame(this.rafId);
     this.sampler.dispose();
     this.pointCloud.dispose();
+    this.ownedRamp?.dispose();
     this.renderer.dispose();
   }
 }

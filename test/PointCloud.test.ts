@@ -37,4 +37,10 @@ describe('PointCloud.addHits', () => {
     pc.clear();
     expect(pc.count).toBe(0);
   });
+
+  it('caps count at capacity when given more hits than capacity in one call', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    pc.addHits([hit(1,1,1,1), hit(2,2,2,2), hit(3,3,3,3), hit(4,4,4,4), hit(5,5,5,5), hit(6,6,6,6)], 1);
+    expect(pc.count).toBe(4);
+  });
 });

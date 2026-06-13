@@ -16,7 +16,8 @@ void main() {
   vec3 col = texture2D(uRamp, vec2(vDist01, 0.5)).rgb;
   float alpha = soft;
   if (uFade > 0.5) {
-    alpha *= clamp(1.0 - vAge / uFadeDuration, 0.0, 1.0);
+    alpha *= clamp(1.0 - vAge / max(uFadeDuration, 0.001), 0.0, 1.0);
+    if (alpha < 0.01) discard;
   }
   gl_FragColor = vec4(col, alpha);
 }

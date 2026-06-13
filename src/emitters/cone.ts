@@ -15,7 +15,11 @@ export function coneRays(
 ): Ray[] {
   const axis = aimDir.clone().normalize();
   const tangent = new THREE.Vector3().crossVectors(axis, refUp);
-  if (tangent.lengthSq() < 1e-6) tangent.crossVectors(axis, new THREE.Vector3(1, 0, 0));
+  if (tangent.lengthSq() < 1e-6) {
+    // refUp ∥ axis: fall back to a world axis that is not parallel to axis
+    const alt = Math.abs(axis.x) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+    tangent.crossVectors(axis, alt);
+  }
   tangent.normalize();
   const bitangent = new THREE.Vector3().crossVectors(axis, tangent).normalize();
 
