@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { PointCloud } from '../src/core/PointCloud';
 
+function asBufAttr(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.BufferAttribute {
+  return attr as THREE.BufferAttribute;
+}
+
 function hit(x: number, y: number, z: number, distance: number) {
   return { point: new THREE.Vector3(x, y, z), distance };
 }
@@ -42,5 +46,27 @@ describe('PointCloud.addHits', () => {
     const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
     pc.addHits([hit(1,1,1,1), hit(2,2,2,2), hit(3,3,3,3), hit(4,4,4,4), hit(5,5,5,5), hit(6,6,6,6)], 1);
     expect(pc.count).toBe(4);
+  });
+
+  it('flags the written position range for GPU upload (single segment)', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    pc.addHits([hit(1, 2, 3, 0.5), hit(4, 5, 6, 1.5)], 10);
+    const posAttr = asBufAttr(pc.points.geometry.getAttribute('position'));
+    expect(posAttr.updateRanges).toEqual([{ start: 0, count: 6 }]);
+  });
+
+  it('flags two ranges when the write wraps around the ring', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    pc.addHits([hit(0, 0, 0, 1), hit(0, 0, 0, 1), hit(0, 0, 0, 1)], 1); // slots 0,1,2 ; head=3
+    pc.addHits([hit(7, 7, 7, 9), hit(8, 8, 8, 9), hit(9, 9, 9, 9)], 2); // slots 3,0,1
+    const posAttr = asBufAttr(pc.points.geometry.getAttribute('position'));
+    // updateRanges accumulates across calls (three.js never auto-clears it):
+    //   first addHits: start 0 count 9  (slots 0,1,2 × 3 components)
+    //   second addHits wraps: slot 3 → start 9 count 3 ; slots 0,1 → start 0 count 6
+    expect(posAttr.updateRanges).toEqual([
+      { start: 0, count: 9 },
+      { start: 9, count: 3 },
+      { start: 0, count: 6 },
+    ]);
   });
 });
