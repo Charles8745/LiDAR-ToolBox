@@ -20,4 +20,14 @@ describe('parseOsmWays', () => {
     const all = r.coastline.length + r.piers.length;
     expect(all).toBe(2);
   });
+  it('ignores ways with fewer than 2 geometry points', () => {
+    const r2 = parseOsmWays({
+      elements: [
+        { type: 'way', tags: { natural: 'coastline' }, geometry: [{ lat: 22.6, lon: 120.27 }] },
+        { type: 'way', tags: { man_made: 'pier' }, geometry: [] },
+      ],
+    });
+    expect(r2.coastline).toHaveLength(0);
+    expect(r2.piers).toHaveLength(0);
+  });
 });
