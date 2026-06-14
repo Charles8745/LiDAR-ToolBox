@@ -2,7 +2,8 @@ import type { World, Projection } from '../geo/projection';
 import type { LatLon, Polyline } from '../data/osm';
 import type { VesselRecord } from '../data/twport';
 import { resolveBerthLatLon } from '../berths';
-import { SHIP_CATEGORY_COLORS, BASE_COLORS, STATUS_COLORS, shipCategoryIndex, statusIndex, valueFor } from '../palette';
+import { SHIP_CATEGORY_COLORS, BASE_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from '../palette';
+import type { ShipCategory } from '../palette';
 
 export interface PointBatch { positions: Float32Array; values: Float32Array; }
 
@@ -53,10 +54,17 @@ export function buildBaseLayer(coastline: Polyline[], piers: Polyline[], proj: P
   return { positions: new Float32Array(pos), values: new Float32Array(val) };
 }
 
-const TYPE_DIMS_M: Array<{ loa: number; beam: number }> = [
-  { loa: 300, beam: 45 }, { loa: 250, beam: 44 }, { loa: 180, beam: 30 }, { loa: 290, beam: 49 },
-  { loa: 40, beam: 12 }, { loa: 130, beam: 16 }, { loa: 200, beam: 32 }, { loa: 120, beam: 20 },
-];
+// Keyed by ShipCategory so a category reorder/addition is caught at compile time.
+const TYPE_DIMS_M = {
+  '貨櫃': { loa: 300, beam: 45 },
+  '油品': { loa: 250, beam: 44 },
+  '散雜': { loa: 180, beam: 30 },
+  'LNG': { loa: 290, beam: 49 },
+  '工作': { loa: 40, beam: 12 },
+  '軍艦': { loa: 130, beam: 16 },
+  '客運': { loa: 200, beam: 32 },
+  '其他': { loa: 120, beam: 20 },
+} satisfies Record<ShipCategory, { loa: number; beam: number }>;
 
 export interface ShipLayerResult extends PointBatch { centers: Array<{ vessel: VesselRecord; x: number; y: number; z: number }>; }
 
@@ -71,7 +79,7 @@ export function buildShipLayer(
     const ll = resolveBerthLatLon(v);
     const c = proj.toWorld(ll.lat, ll.lon);
     const catIdx = shipCategoryIndex(v.shipType);
-    const dim = TYPE_DIMS_M[catIdx];
+    const dim = TYPE_DIMS_M[SHIP_CATEGORIES[catIdx]];
     const pts = sampleShipFootprint(c, dim.loa * scale, dim.beam * scale, 0, spacing);
     const v01 = colorBy === 'type' ? valueFor(catIdx, SHIP_CATEGORY_COLORS.length) : statusVal;
     for (const p of pts) { pos.push(p.x, Y_SHIP, p.z); val.push(v01); }
