@@ -9,7 +9,8 @@ import osmData from './data/osm-khh.json';
 
 interface Snapshot { capturedAtMs: number; berthing: VesselRecord[]; forecast: VesselRecord[]; }
 const snaps = import.meta.glob('./data/snapshots/*.json', { eager: true, import: 'default' });
-const snapshot = Object.values(snaps)[0] as Snapshot;
+const snapshot = Object.values(snaps)[0] as Snapshot | undefined;
+if (!snapshot) throw new Error('No snapshot found in ./data/snapshots/ — run `npm run port:fetch`');
 const osm = osmData as OsmGeometry;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
