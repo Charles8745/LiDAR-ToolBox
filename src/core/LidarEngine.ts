@@ -218,6 +218,9 @@ export class LidarEngine {
     return this.pointCloud.count;
   }
 
+  /** The render camera (for app-side world→screen projection / picking). */
+  get camera3D(): THREE.PerspectiveCamera { return this.camera; }
+
   dispose(): void {
     this.disposed = true;
     this.running = false;

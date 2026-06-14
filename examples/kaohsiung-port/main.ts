@@ -1,8 +1,11 @@
+import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
 import { buildBaseLayer, buildShipLayer, type ShipLayerResult } from './scene/portPoints';
 import { buildIntervals, occupancyAt } from './time/occupancy';
-import { BASE_COLORS, SHIP_CATEGORY_COLORS } from './palette';
+import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex } from './palette';
+import { MIN_BERTH, MAX_BERTH } from './berths';
+import { createOverlay } from './ui/overlay';
 import type { VesselRecord } from './data/twport';
 import type { OsmGeometry } from './data/osm';
 import osmData from './data/osm-khh.json';
@@ -20,6 +23,7 @@ fit();
 const proj = createProjection(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon, WORLD_SCALE);
 const intervals = buildIntervals([...snapshot.berthing, ...snapshot.forecast]);
 const nowMs = snapshot.capturedAtMs;
+const TOTAL_BERTHS = MAX_BERTH - MIN_BERTH + 1;
 
 // Static base layer (coastline + piers), constant-size points.
 const base = buildBaseLayer(osm.coastline, osm.piers, proj);
@@ -29,23 +33,28 @@ const basePC = new PointCloud({
 });
 basePC.addPoints(base.positions, base.values);
 
-// Dynamic ship layer (rebuilt on scrub later), constant-size points, fine footprint spacing.
+// Dynamic ship layer (rebuilt on filter/scrub), constant-size points, fine footprint spacing.
+const shipTypeLUT = buildCategoryLUT(SHIP_CATEGORY_COLORS);
+const shipStatusLUT = buildCategoryLUT(STATUS_COLORS);
 const shipPC = new PointCloud({
-  capacity: 200_000, ramp: buildCategoryLUT(SHIP_CATEGORY_COLORS),
+  capacity: 200_000, ramp: shipTypeLUT,
   persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
 });
 let shipCenters: ShipLayerResult['centers'] = [];
-function rebuildShips(tMs: number, colorBy: 'type' | 'status') {
-  const occ = [...occupancyAt(intervals, tMs).values()];
-  const batch = buildShipLayer(occ, proj, WORLD_SCALE, colorBy, 0.15);
+function rebuildShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>) {
+  let occ = [...occupancyAt(intervals, tMs).values()];
+  if (enabled && enabled.size < SHIP_CATEGORIES.length) {
+    occ = occ.filter((v) => enabled.has(SHIP_CATEGORIES[shipCategoryIndex(v.shipType)]));
+  }
+  const batch = buildShipLayer(occ, proj, WORLD_SCALE, mode, 0.15);
   shipCenters = batch.centers;
+  shipPC.setRamp(mode === 'type' ? shipTypeLUT : shipStatusLUT);
   shipPC.clear();
   shipPC.addPoints(batch.positions, batch.values);
 }
 rebuildShips(nowMs, 'type');
 
 // Auto-frame the camera on the active berth area (the vessels) for a centered oblique view.
-// (The OSM coastline extends far beyond the commercial port, so framing on the ships keeps the focus tight.)
 function frameOf(points: Array<{ x: number; z: number }>) {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (const p of points) {
@@ -64,13 +73,41 @@ const engine = new LidarEngine({
   cameraPosition: [cx, dist * 0.85, cz + dist * 0.75],
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
-  pointBudget: 100,
+  pointBudget: 1,
 });
 engine.addLayer(basePC.points);
 engine.addLayer(shipPC.points);
 engine.start();
-
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
-// Dev/verification handles (used by later overlay/time-slider tasks too).
-(window as any).__twin = { engine, basePC, shipPC, rebuildShips, nowMs, intervals, get shipCenters() { return shipCenters; } };
+// Overlay (legend / KPI / ship detail / filter / view toggle).
+let colorBy: 'type' | 'status' = 'type';
+let filter = new Set<string>(SHIP_CATEGORIES);
+let currentMs = nowMs;
+const overlay = createOverlay(document.getElementById('overlay') as HTMLElement, {
+  onFilter(enabled) { filter = enabled; refresh(currentMs); },
+  onView(mode) { colorBy = mode; refresh(currentMs); },
+});
+function refresh(tMs: number) {
+  currentMs = tMs;
+  rebuildShips(tMs, colorBy, filter);
+  overlay.setKpi({ inPort: shipCenters.length, occupied: shipCenters.length, total: TOTAL_BERTHS, dateMs: tMs });
+}
+refresh(nowMs);
+
+// Click-to-pick the nearest ship centroid (screen-space).
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let best: { v: VesselRecord; d: number } | null = null;
+  for (const c of shipCenters) {
+    const p = new THREE.Vector3(c.x, c.y, c.z).project(engine.camera3D);
+    const sx = (p.x * 0.5 + 0.5) * rect.width, sy = (-p.y * 0.5 + 0.5) * rect.height;
+    const d = Math.hypot(sx - mx, sy - my);
+    if (p.z < 1 && (!best || d < best.d)) best = { v: c.vessel, d };
+  }
+  if (best && best.d < 28) overlay.showVessel(best.v); else overlay.hideVessel();
+});
+
+// Dev/verification handles.
+(window as any).__twin = { engine, basePC, shipPC, rebuildShips, refresh, nowMs, intervals, get shipCenters() { return shipCenters; } };
