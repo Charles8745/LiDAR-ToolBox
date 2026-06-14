@@ -11,6 +11,8 @@ export interface PointCloudOptions {
   maxDistance?: number;
   pointSize?: number;
   fadeDuration?: number;
+  colorMode?: 'distance' | 'value';
+  maxPointSize?: number;
 }
 
 /** GPU point store: a single THREE.Points backed by a FIFO ring buffer of preallocated attributes. */
@@ -19,6 +21,7 @@ export class PointCloud {
   readonly positionArray: Float32Array;
   readonly distanceArray: Float32Array;
   readonly birthArray: Float32Array;
+  readonly valueArray: Float32Array;
 
   private ring: RingBuffer;
   private geometry: THREE.BufferGeometry;
@@ -26,23 +29,28 @@ export class PointCloud {
   private posAttr: THREE.BufferAttribute;
   private distAttr: THREE.BufferAttribute;
   private birthAttr: THREE.BufferAttribute;
+  private valueAttr: THREE.BufferAttribute;
 
   constructor(opts: PointCloudOptions) {
     this.ring = new RingBuffer(opts.capacity);
     this.positionArray = new Float32Array(opts.capacity * 3);
     this.distanceArray = new Float32Array(opts.capacity);
     this.birthArray = new Float32Array(opts.capacity);
+    this.valueArray = new Float32Array(opts.capacity);
 
     this.geometry = new THREE.BufferGeometry();
     this.posAttr = new THREE.BufferAttribute(this.positionArray, 3);
     this.distAttr = new THREE.BufferAttribute(this.distanceArray, 1);
     this.birthAttr = new THREE.BufferAttribute(this.birthArray, 1);
+    this.valueAttr = new THREE.BufferAttribute(this.valueArray, 1);
     this.posAttr.setUsage(THREE.DynamicDrawUsage);
     this.distAttr.setUsage(THREE.DynamicDrawUsage);
     this.birthAttr.setUsage(THREE.DynamicDrawUsage);
+    this.valueAttr.setUsage(THREE.DynamicDrawUsage);
     this.geometry.setAttribute('position', this.posAttr);
     this.geometry.setAttribute('aDistance', this.distAttr);
     this.geometry.setAttribute('aBirth', this.birthAttr);
+    this.geometry.setAttribute('aValue', this.valueAttr);
     this.geometry.setDrawRange(0, 0);
     this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
 
@@ -54,6 +62,8 @@ export class PointCloud {
         uPointSize: { value: opts.pointSize ?? 2 },
         uFade: { value: opts.persistence === 'fade' ? 1 : 0 },
         uFadeDuration: { value: opts.fadeDuration ?? 6 },
+        uColorMode: { value: opts.colorMode === 'value' ? 1 : 0 },
+        uMaxPointSize: { value: opts.maxPointSize ?? 5 },
       },
       vertexShader,
       fragmentShader,
@@ -102,6 +112,10 @@ export class PointCloud {
 
   setRamp(texture: THREE.Texture): void {
     this.material.uniforms.uRamp.value = texture;
+  }
+
+  setColorMode(mode: 'distance' | 'value'): void {
+    this.material.uniforms.uColorMode.value = mode === 'value' ? 1 : 0;
   }
 
   setPersistence(persistence: Persistence): void {

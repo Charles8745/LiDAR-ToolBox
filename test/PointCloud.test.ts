@@ -70,3 +70,29 @@ describe('PointCloud.addHits', () => {
     ]);
   });
 });
+
+describe('PointCloud value/color mode', () => {
+  it('defaults to distance color mode (uColorMode = 0)', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    expect((pc as any)['material'].uniforms.uColorMode.value).toBe(0);
+  });
+
+  it('constructor colorMode "value" sets uColorMode = 1', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate', colorMode: 'value' });
+    expect((pc as any)['material'].uniforms.uColorMode.value).toBe(1);
+  });
+
+  it('setColorMode toggles the uniform', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    pc.setColorMode('value');
+    expect((pc as any)['material'].uniforms.uColorMode.value).toBe(1);
+    pc.setColorMode('distance');
+    expect((pc as any)['material'].uniforms.uColorMode.value).toBe(0);
+  });
+
+  it('exposes a valueArray sized to capacity and an aValue attribute', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    expect(pc.valueArray.length).toBe(4);
+    expect(pc.points.geometry.getAttribute('aValue')).toBeDefined();
+  });
+});
