@@ -86,9 +86,9 @@ export class LidarEngine {
     this.emitter = opts.emitter ?? { emit: () => [] };
 
     if (opts.cameraMode === 'orbit') {
-      this.camera.position.set(...(opts.cameraPosition ?? [0, 120, 160]));
+      this.camera.position.set(...(opts.cameraPosition ?? ([0, 120, 160] as [number, number, number])));
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-      this.controls.target.set(...(opts.cameraTarget ?? [0, 0, 0]));
+      this.controls.target.set(...(opts.cameraTarget ?? ([0, 0, 0] as [number, number, number])));
       this.controls.enableDamping = true;
       this.controls.update();
     } else {

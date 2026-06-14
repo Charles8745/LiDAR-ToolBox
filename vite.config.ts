@@ -10,7 +10,7 @@ export default defineConfig({
       fileName: 'lidar-engine',
       formats: ['es'],
     },
-    rollupOptions: { external: ['three', 'three-mesh-bvh'] },
+    rollupOptions: { external: ['three', 'three-mesh-bvh', /^three\/examples\//] },
   },
   test: {
     environment: 'node',
