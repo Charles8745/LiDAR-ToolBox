@@ -145,6 +145,10 @@ export class LidarEngine {
       this.pointCloud.addHits(hits, this.time);
     }
     this.pointCloud.update(this.time);
+    for (const layer of this.extraLayers) {
+      const mat = (layer as THREE.Points).material as THREE.ShaderMaterial | undefined;
+      if (mat && mat.uniforms && mat.uniforms.uTime) mat.uniforms.uTime.value = this.time;
+    }
     this.controls?.update();
 
     this.renderer.render(this.scene, this.camera);
@@ -222,7 +226,13 @@ export class LidarEngine {
     this.pointCloud.dispose();
     this.ownedRamp?.dispose();
     this.controls?.dispose();
-    for (const layer of this.extraLayers) this.scene.remove(layer);
+    for (const layer of this.extraLayers) {
+      this.scene.remove(layer);
+      const points = layer as THREE.Points;
+      points.geometry?.dispose();
+      const mat = points.material;
+      if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((m) => m.dispose());
+    }
     this.extraLayers.length = 0;
     this.renderer.dispose();
   }
