@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RaycastSampler } from './RaycastSampler';
 import { PointCloud } from './PointCloud';
 import { buildRampTextureFromFn } from '../ramps/lut';
@@ -6,14 +7,21 @@ import type { Emitter, Scannable, ColorRamp, Persistence, EmitContext } from './
 
 export interface LidarEngineOptions {
   canvas: HTMLCanvasElement;
-  scannable: Scannable;
-  emitter: Emitter;
+  scannable?: Scannable;
+  emitter?: Emitter;
   ramp?: ColorRamp;
   pointBudget?: number;
   persistence?: Persistence;
   maxDistance?: number;
   pointSize?: number;
+  maxPointSize?: number;
   fadeDuration?: number;
+  colorMode?: 'distance' | 'value';
+  cameraMode?: 'lookAround' | 'orbit';
+  cameraPosition?: [number, number, number];
+  cameraTarget?: [number, number, number];
+  cameraFar?: number;
+  autoScan?: boolean;
 }
 
 function resolveRamp(ramp: ColorRamp | undefined): THREE.Texture {
@@ -31,6 +39,10 @@ export class LidarEngine {
   private sampler: RaycastSampler;
   private pointCloud: PointCloud;
   private emitter: Emitter;
+
+  private controls: OrbitControls | null = null;
+  private autoScan: boolean = true;
+  private extraLayers: THREE.Object3D[] = [];
 
   private aim = new THREE.Vector2(0, 0);
   private yaw = 0;
@@ -53,10 +65,11 @@ export class LidarEngine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.resize();
 
-    this.camera = new THREE.PerspectiveCamera(70, this.aspect(), 0.05, 500);
-    this.camera.position.set(0, 0, 0);
+    const far = opts.cameraFar ?? 500;
+    this.camera = new THREE.PerspectiveCamera(70, this.aspect(), 0.05, far);
+    this.autoScan = opts.autoScan ?? true;
 
-    this.sampler = new RaycastSampler(opts.scannable.objects);
+    this.sampler = new RaycastSampler(opts.scannable?.objects ?? []);
     const rampTex = resolveRamp(opts.ramp);
     this.ownedRamp = opts.ramp === undefined || typeof opts.ramp === 'function' ? rampTex : null;
     this.pointCloud = new PointCloud({
@@ -65,11 +78,23 @@ export class LidarEngine {
       persistence: opts.persistence ?? 'accumulate',
       maxDistance: opts.maxDistance,
       pointSize: opts.pointSize,
+      maxPointSize: opts.maxPointSize,
       fadeDuration: opts.fadeDuration,
+      colorMode: opts.colorMode,
     });
     this.scene.add(this.pointCloud.points);
-    this.emitter = opts.emitter;
-    this.applyCameraRotation();
+    this.emitter = opts.emitter ?? { emit: () => [] };
+
+    if (opts.cameraMode === 'orbit') {
+      this.camera.position.set(...(opts.cameraPosition ?? [0, 120, 160]));
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.target.set(...(opts.cameraTarget ?? [0, 0, 0]));
+      this.controls.enableDamping = true;
+      this.controls.update();
+    } else {
+      this.camera.position.set(0, 0, 0);
+      this.applyCameraRotation();
+    }
   }
 
   private aspect(): number {
@@ -98,24 +123,27 @@ export class LidarEngine {
     const dt = this.clock.getDelta();
     this.time += dt;
 
-    this.camera.getWorldDirection(this.fwd);
-    this.right.crossVectors(this.fwd, this.camera.up).normalize();
-    this.upVec.crossVectors(this.right, this.fwd).normalize();
+    if (this.autoScan) {
+      this.camera.getWorldDirection(this.fwd);
+      this.right.crossVectors(this.fwd, this.camera.up).normalize();
+      this.upVec.crossVectors(this.right, this.fwd).normalize();
 
-    const ctx: EmitContext = {
-      origin: this.camera.position,
-      forward: this.fwd,
-      right: this.right,
-      up: this.upVec,
-      aim: this.aim,
-      time: this.time,
-      dt,
-      rng: Math.random,
-    };
-    const rays = this.emitter.emit(ctx);
-    const hits = this.sampler.sample(rays);
-    this.pointCloud.addHits(hits, this.time);
+      const ctx: EmitContext = {
+        origin: this.camera.position,
+        forward: this.fwd,
+        right: this.right,
+        up: this.upVec,
+        aim: this.aim,
+        time: this.time,
+        dt,
+        rng: Math.random,
+      };
+      const rays = this.emitter.emit(ctx);
+      const hits = this.sampler.sample(rays);
+      this.pointCloud.addHits(hits, this.time);
+    }
     this.pointCloud.update(this.time);
+    this.controls?.update();
 
     this.renderer.render(this.scene, this.camera);
     this.rafId = requestAnimationFrame(this.loop);
@@ -166,6 +194,12 @@ export class LidarEngine {
     this.pointCloud.setPersistence(persistence);
   }
 
+  /** Attach an app-owned object (e.g. another PointCloud's `.points`) to the scene. */
+  addLayer(obj: THREE.Object3D): void {
+    this.extraLayers.push(obj);
+    this.scene.add(obj);
+  }
+
   pause(): void {
     this.running = false;
   }
@@ -185,6 +219,9 @@ export class LidarEngine {
     this.sampler.dispose();
     this.pointCloud.dispose();
     this.ownedRamp?.dispose();
+    this.controls?.dispose();
+    for (const layer of this.extraLayers) this.scene.remove(layer);
+    this.extraLayers.length = 0;
     this.renderer.dispose();
   }
 }
