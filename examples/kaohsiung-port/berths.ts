@@ -38,7 +38,7 @@ export function sampleAlong(line: LatLon[], frac: number): LatLon {
   let target = Math.max(0, Math.min(1, frac)) * total;
   for (let i = 0; i < lens.length; i++) {
     if (target <= lens[i] || i === lens.length - 1) {
-      const t = lens[i] === 0 ? 0 : target / lens[i];
+      const t = lens[i] === 0 ? 0 : Math.min(1, target / lens[i]);
       return {
         lat: line[i].lat + (line[i + 1].lat - line[i].lat) * t,
         lon: line[i].lon + (line[i + 1].lon - line[i].lon) * t,

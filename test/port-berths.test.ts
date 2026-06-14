@@ -11,6 +11,9 @@ describe('sampleAlong', () => {
     const m = sampleAlong(line, 0.5);
     expect(m.lon).toBeCloseTo(5);
   });
+  it('returns the lone point for a single-point line', () => {
+    expect(sampleAlong([{ lat: 3, lon: 4 }], 0.7)).toEqual({ lat: 3, lon: 4 });
+  });
 });
 
 describe('berthPositionLatLon', () => {
@@ -29,5 +32,8 @@ describe('resolveBerthLatLon', () => {
     const a = resolveBerthLatLon({ berthNo: null, wharfName: '二港口港外' } as any);
     const b = resolveBerthLatLon({ berthNo: null, wharfName: '二港口港外' } as any);
     expect(a).toEqual(b);
+  });
+  it('delegates a numbered berth to berthPositionLatLon', () => {
+    expect(resolveBerthLatLon({ berthNo: 50, wharfName: '#50碼頭' } as any)).toEqual(berthPositionLatLon(50));
   });
 });
