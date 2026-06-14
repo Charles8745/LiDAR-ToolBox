@@ -99,6 +99,42 @@ const engine = new LidarEngine({
 engine.addLayer(basePC.points);
 engine.addLayer(shipPC.points);
 engine.addLayer(incPC.points);
+
+// C backdrop: a chart-style map plane drawn at runtime from the real OSM geometry (offline, no tiles).
+function buildMapPlane(): THREE.Mesh {
+  const BB = { s: 22.53, w: 120.24, n: 22.64, e: 120.34 };
+  const W = 1024, H = 1024;
+  const cvs = document.createElement('canvas'); cvs.width = W; cvs.height = H;
+  const g = cvs.getContext('2d')!;
+  g.fillStyle = '#0a1622'; g.fillRect(0, 0, W, H);
+  const toPx = (ll: { lat: number; lon: number }) => ({
+    x: ((ll.lon - BB.w) / (BB.e - BB.w)) * W,
+    y: (1 - (ll.lat - BB.s) / (BB.n - BB.s)) * H, // north at top of canvas
+  });
+  const draw = (lines: Array<Array<{ lat: number; lon: number }>>, color: string, width: number) => {
+    g.strokeStyle = color; g.lineWidth = width;
+    for (const line of lines) {
+      g.beginPath();
+      line.forEach((ll, i) => { const p = toPx(ll); if (i === 0) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y); });
+      g.stroke();
+    }
+  };
+  draw(osm.coastline, 'rgba(90,150,160,0.7)', 1.5);
+  draw(osm.piers, 'rgba(150,210,220,0.85)', 1.5);
+  const tex = new THREE.CanvasTexture(cvs);
+  const sw = proj.toWorld(BB.s, BB.w), ne = proj.toWorld(BB.n, BB.e);
+  const pw = Math.abs(ne.x - sw.x), ph = Math.abs(ne.z - sw.z);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(pw, ph),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.6, depthWrite: false }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set((sw.x + ne.x) / 2, -0.5, (sw.z + ne.z) / 2);
+  mesh.visible = false;
+  return mesh;
+}
+const mapPlane = buildMapPlane();
+engine.addLayer(mapPlane);
 engine.start();
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
@@ -110,6 +146,7 @@ const overlay = createOverlay(document.getElementById('overlay') as HTMLElement,
   onFilter(enabled) { filter = enabled; refresh(currentMs); },
   onView(mode) { colorBy = mode; refresh(currentMs); },
   onScrub(tMs) { refresh(tMs); },
+  onBackdrop(on) { mapPlane.visible = on; },
 });
 function refresh(tMs: number) {
   currentMs = tMs;
@@ -137,4 +174,4 @@ canvas.addEventListener('click', (e) => {
 });
 
 // Dev/verification handles.
-(window as any).__twin = { engine, basePC, shipPC, incPC, rebuildShips, rebuildIncoming, refresh, nowMs, intervals, get shipCenters() { return shipCenters; } };
+(window as any).__twin = { engine, basePC, shipPC, incPC, mapPlane, rebuildShips, rebuildIncoming, refresh, nowMs, intervals, get shipCenters() { return shipCenters; } };

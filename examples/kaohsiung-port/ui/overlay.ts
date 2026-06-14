@@ -17,6 +17,7 @@ export interface OverlayHandlers {
   onFilter(enabled: Set<string>): void;
   onView(mode: 'type' | 'status'): void;
   onScrub(tMs: number): void;
+  onBackdrop(on: boolean): void;
 }
 export interface OverlayApi {
   setKpi(opts: { inPort: number; occupied: number; total: number; dateMs: number }): void;
@@ -57,6 +58,12 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   let mode: 'type' | 'status' = 'type';
   viewBtn.addEventListener('click', () => { mode = mode === 'type' ? 'status' : 'type'; handlers.onView(mode); });
   legend.appendChild(viewBtn);
+  const bgBtn = document.createElement('button');
+  bgBtn.textContent = '🗺️ 地圖底圖:關';
+  bgBtn.style.cssText = 'margin-top:6px;width:100%;background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:6px;cursor:pointer';
+  let bgOn = false;
+  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `🗺️ 地圖底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
+  legend.appendChild(bgBtn);
   root.appendChild(legend);
 
   const card = document.createElement('div');
