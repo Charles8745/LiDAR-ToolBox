@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emitters, ramps, scannables } from '../src/index';
+import { emitters, ramps, scannables, PointCloud, buildCategoryLUT, buildRampTextureFromFn } from '../src/index';
 
 describe('public API', () => {
   it('exposes the three emitter factories', () => {
@@ -19,10 +19,9 @@ describe('public API', () => {
     expect(s.objects.length).toBeGreaterThan(0);
   });
 
-  it('exposes PointCloud, buildCategoryLUT and buildRampTextureFromFn', async () => {
-    const api = await import('../src/index');
-    expect(typeof (api as any).PointCloud).toBe('function');
-    expect(typeof (api as any).buildCategoryLUT).toBe('function');
-    expect(typeof (api as any).buildRampTextureFromFn).toBe('function');
+  it('exposes PointCloud, buildCategoryLUT and buildRampTextureFromFn', () => {
+    expect(typeof PointCloud).toBe('function');
+    expect(typeof buildCategoryLUT).toBe('function');
+    expect(typeof buildRampTextureFromFn).toBe('function');
   });
 });

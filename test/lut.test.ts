@@ -8,6 +8,7 @@ describe('buildCategoryLUT', () => {
     expect(tex.image.width).toBe(3);
     expect(tex.magFilter).toBe(THREE.NearestFilter);
     expect(tex.minFilter).toBe(THREE.NearestFilter);
+    expect(tex.version).toBeGreaterThan(0); // needsUpdate is a setter; version>0 confirms it was called
   });
 
   it('writes the exact category colors into the texel data', () => {
@@ -15,6 +16,14 @@ describe('buildCategoryLUT', () => {
     const d = tex.image.data as Uint8Array;
     expect([d[0], d[1], d[2], d[3]]).toEqual([10, 20, 30, 255]);
     expect([d[4], d[5], d[6], d[7]]).toEqual([40, 50, 60, 255]);
+  });
+
+  it('pads a single-color input to width 2 by repeating the color', () => {
+    const tex = buildCategoryLUT([[100, 150, 200]]);
+    expect(tex.image.width).toBe(2);
+    const d = tex.image.data as Uint8Array;
+    expect([d[0], d[1], d[2], d[3]]).toEqual([100, 150, 200, 255]);
+    expect([d[4], d[5], d[6], d[7]]).toEqual([100, 150, 200, 255]);
   });
 
   it('throws on an empty color list', () => {
