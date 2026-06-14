@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>高雄港 LiDAR 數位孿生</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden;
+        font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; color: #cfe; }
+      #view { display: block; width: 100vw; height: 100vh; }
+      #overlay { position: fixed; inset: 0; pointer-events: none; }
+      #overlay .panel { position: fixed; background: rgba(10,16,24,.82); border: 1px solid #213040;
+        border-radius: 8px; pointer-events: auto; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="overlay"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
