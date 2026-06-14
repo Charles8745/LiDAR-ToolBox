@@ -9,7 +9,8 @@
     "build": "vite build && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "port:fetch": "vite-node examples/kaohsiung-port/data/fetch-snapshot.ts"
+    "port:fetch": "vite-node examples/kaohsiung-port/data/fetch-snapshot.ts",
+    "port:osm": "vite-node examples/kaohsiung-port/data/fetch-osm.ts"
   },
   "dependencies": {
     "three": "^0.171.0",
