@@ -11,17 +11,19 @@ export function fmtClock(ms: number): string {
 }
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
-/** Escape a raw data string before interpolating into innerHTML. */
 const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ESC[c]);
 
 export interface OverlayHandlers {
   onFilter(enabled: Set<string>): void;
   onView(mode: 'type' | 'status'): void;
+  onScrub(tMs: number): void;
 }
 export interface OverlayApi {
   setKpi(opts: { inPort: number; occupied: number; total: number; dateMs: number }): void;
   showVessel(v: VesselRecord): void;
   hideVessel(): void;
+  setTimeRange(opts: { minMs: number; maxMs: number; nowMs: number }): void;
+  setClock(ms: number): void;
 }
 
 export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): OverlayApi {
@@ -62,6 +64,33 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   card.style.cssText = 'right:12px;top:60px;width:200px;padding:10px;display:none';
   root.appendChild(card);
 
+  // Bottom time slider (24h scrub + play).
+  const bar = document.createElement('div');
+  bar.className = 'panel';
+  bar.style.cssText = 'left:12px;right:12px;bottom:12px;padding:8px 12px;display:flex;gap:10px;align-items:center';
+  const play = document.createElement('button');
+  play.textContent = '▶';
+  play.style.cssText = 'background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:4px 9px;cursor:pointer';
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.style.flex = '1';
+  const clock = document.createElement('span'); clock.style.cssText = 'min-width:92px;text-align:right;color:#9fe';
+  bar.append(play, slider, clock);
+  root.appendChild(bar);
+
+  let playing = false; let timer = 0;
+  function stop() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
+  slider.addEventListener('input', () => { stop(); handlers.onScrub(+slider.value); });
+  play.addEventListener('click', () => {
+    playing = !playing; play.textContent = playing ? '⏸' : '▶';
+    const stepFn = () => {
+      if (!playing) return;
+      let v = +slider.value + (+slider.max - +slider.min) / 600; // ~10s sweep across the range
+      if (v > +slider.max) v = +slider.min;
+      slider.value = String(v); handlers.onScrub(v); timer = requestAnimationFrame(stepFn);
+    };
+    if (playing) timer = requestAnimationFrame(stepFn);
+  });
+
   return {
     setKpi({ inPort, occupied, total, dateMs }) {
       kpi.innerHTML = `<b style="color:#9fe">高雄港 · LiDAR 數位孿生</b>
@@ -79,5 +108,9 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
         <div>IMO:${esc(v.imo) || '—'}</div>`;
     },
     hideVessel() { card.style.display = 'none'; },
+    setTimeRange({ minMs, maxMs, nowMs }) {
+      slider.min = String(minMs); slider.max = String(maxMs); slider.value = String(nowMs);
+    },
+    setClock(ms) { clock.textContent = fmtClock(ms); },
   };
 }

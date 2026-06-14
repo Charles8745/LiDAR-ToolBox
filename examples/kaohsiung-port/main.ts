@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
-import { buildBaseLayer, buildShipLayer, type ShipLayerResult } from './scene/portPoints';
-import { buildIntervals, occupancyAt } from './time/occupancy';
-import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex } from './palette';
-import { MIN_BERTH, MAX_BERTH } from './berths';
+import { buildBaseLayer, buildShipLayer, sampleShipFootprint, type ShipLayerResult } from './scene/portPoints';
+import { buildIntervals, occupancyAt, berthStatusAt } from './time/occupancy';
+import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from './palette';
+import { MIN_BERTH, MAX_BERTH, berthPositionLatLon } from './berths';
 import { createOverlay } from './ui/overlay';
 import type { VesselRecord } from './data/twport';
 import type { OsmGeometry } from './data/osm';
@@ -24,6 +24,8 @@ const proj = createProjection(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon, WORLD_
 const intervals = buildIntervals([...snapshot.berthing, ...snapshot.forecast]);
 const nowMs = snapshot.capturedAtMs;
 const TOTAL_BERTHS = MAX_BERTH - MIN_BERTH + 1;
+const HOUR = 3600_000;
+const INCOMING_WINDOW = 2 * HOUR;
 
 // Static base layer (coastline + piers), constant-size points.
 const base = buildBaseLayer(osm.coastline, osm.piers, proj);
@@ -52,6 +54,25 @@ function rebuildShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string
   shipPC.clear();
   shipPC.addPoints(batch.positions, batch.values);
 }
+
+// Incoming-berth markers (amber): berths with a vessel arriving within INCOMING_WINDOW.
+const incPC = new PointCloud({
+  capacity: 40_000, ramp: shipStatusLUT,
+  persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
+});
+const INCOMING_VAL = valueFor(statusIndex('incoming'), STATUS_COLORS.length);
+function rebuildIncoming(tMs: number) {
+  const pos: number[] = []; const val: number[] = [];
+  for (let b = MIN_BERTH; b <= MAX_BERTH; b++) {
+    if (berthStatusAt(intervals, b, tMs, INCOMING_WINDOW) !== 'incoming') continue;
+    const ll = berthPositionLatLon(b);
+    const c = proj.toWorld(ll.lat, ll.lon);
+    for (const p of sampleShipFootprint(c, 0.3, 0.3, 0, 0.08)) { pos.push(p.x, 0.8, p.z); val.push(INCOMING_VAL); }
+  }
+  incPC.clear();
+  incPC.addPoints(new Float32Array(pos), new Float32Array(val));
+}
+
 rebuildShips(nowMs, 'type');
 
 // Auto-frame the camera on the active berth area (the vessels) for a centered oblique view.
@@ -77,24 +98,28 @@ const engine = new LidarEngine({
 });
 engine.addLayer(basePC.points);
 engine.addLayer(shipPC.points);
+engine.addLayer(incPC.points);
 engine.start();
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
-// Overlay (legend / KPI / ship detail / filter / view toggle).
+// Overlay (legend / KPI / detail / filter / view toggle / time slider).
 let colorBy: 'type' | 'status' = 'type';
 let filter = new Set<string>(SHIP_CATEGORIES);
 let currentMs = nowMs;
 const overlay = createOverlay(document.getElementById('overlay') as HTMLElement, {
   onFilter(enabled) { filter = enabled; refresh(currentMs); },
   onView(mode) { colorBy = mode; refresh(currentMs); },
+  onScrub(tMs) { refresh(tMs); },
 });
 function refresh(tMs: number) {
   currentMs = tMs;
   rebuildShips(tMs, colorBy, filter);
-  // KPI reflects actual occupancy at tMs; the type filter only hides vessels, it doesn't change reality.
+  rebuildIncoming(tMs);
   const inPort = occupancyAt(intervals, tMs).size;
   overlay.setKpi({ inPort, occupied: inPort, total: TOTAL_BERTHS, dateMs: tMs });
+  overlay.setClock(tMs);
 }
+overlay.setTimeRange({ minMs: nowMs - 12 * HOUR, maxMs: nowMs + 12 * HOUR, nowMs });
 refresh(nowMs);
 
 // Click-to-pick the nearest ship centroid (screen-space).
@@ -112,4 +137,4 @@ canvas.addEventListener('click', (e) => {
 });
 
 // Dev/verification handles.
-(window as any).__twin = { engine, basePC, shipPC, rebuildShips, refresh, nowMs, intervals, get shipCenters() { return shipCenters; } };
+(window as any).__twin = { engine, basePC, shipPC, incPC, rebuildShips, rebuildIncoming, refresh, nowMs, intervals, get shipCenters() { return shipCenters; } };
