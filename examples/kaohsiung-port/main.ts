@@ -43,9 +43,27 @@ function rebuildShips(tMs: number, colorBy: 'type' | 'status') {
 }
 rebuildShips(nowMs, 'type');
 
+// Auto-frame the camera on the active berth area (the vessels) for a centered oblique view.
+// (The OSM coastline extends far beyond the commercial port, so framing on the ships keeps the focus tight.)
+function frameOf(points: Array<{ x: number; z: number }>) {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+  }
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const radius = Math.max(maxX - minX, maxZ - minZ) / 2 || 50;
+  return { cx, cz, radius };
+}
+const { cx, cz, radius } = frameOf(shipCenters.length ? shipCenters : [{ x: 0, z: 0 }]);
+const dist = radius * 1.7 + 30;
+
 const engine = new LidarEngine({
   canvas, autoScan: false, cameraMode: 'orbit',
-  cameraPosition: [0, 110, 150], cameraTarget: [0, 0, 0], pointBudget: 100,
+  cameraPosition: [cx, dist * 0.85, cz + dist * 0.75],
+  cameraTarget: [cx, 0, cz],
+  cameraFar: dist * 6,
+  pointBudget: 100,
 });
 engine.addLayer(basePC.points);
 engine.addLayer(shipPC.points);
