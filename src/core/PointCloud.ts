@@ -105,6 +105,39 @@ export class PointCloud {
     this.geometry.setDrawRange(0, this.ring.count);
   }
 
+  /**
+   * Append a precomputed batch of points directly (no raycast).
+   * `positions` is a flat xyz array (length = 3 × n); `values` is the
+   * per-point normalized value in [0,1] used by the 'value' color mode.
+   */
+  addPoints(positions: ArrayLike<number>, values: ArrayLike<number>, time = 0): void {
+    const n = values.length;
+    if (n === 0) return;
+    const segments = this.ring.reserve(n);
+    let vi = 0;
+    for (const seg of segments) {
+      for (let i = 0; i < seg.length; i++) {
+        const slot = seg.start + i;
+        this.positionArray[slot * 3 + 0] = positions[vi * 3 + 0];
+        this.positionArray[slot * 3 + 1] = positions[vi * 3 + 1];
+        this.positionArray[slot * 3 + 2] = positions[vi * 3 + 2];
+        this.valueArray[slot] = values[vi];
+        this.distanceArray[slot] = 0;
+        this.birthArray[slot] = time;
+        vi++;
+      }
+      this.posAttr.addUpdateRange(seg.start * 3, seg.length * 3);
+      this.valueAttr.addUpdateRange(seg.start, seg.length);
+      this.distAttr.addUpdateRange(seg.start, seg.length);
+      this.birthAttr.addUpdateRange(seg.start, seg.length);
+    }
+    this.posAttr.needsUpdate = true;
+    this.valueAttr.needsUpdate = true;
+    this.distAttr.needsUpdate = true;
+    this.birthAttr.needsUpdate = true;
+    this.geometry.setDrawRange(0, this.ring.count);
+  }
+
   /** Advance the time uniform (drives fade mode). */
   update(time: number): void {
     this.material.uniforms.uTime.value = time;

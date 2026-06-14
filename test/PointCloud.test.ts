@@ -96,3 +96,37 @@ describe('PointCloud value/color mode', () => {
     expect(pc.points.geometry.getAttribute('aValue')).toBeDefined();
   });
 });
+
+describe('PointCloud.addPoints', () => {
+  it('writes positions and values into the buffers', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate', colorMode: 'value' });
+    pc.addPoints(new Float32Array([1, 2, 3, 4, 5, 6]), new Float32Array([0.25, 0.75]));
+    expect(pc.count).toBe(2);
+    expect([pc.positionArray[0], pc.positionArray[1], pc.positionArray[2]]).toEqual([1, 2, 3]);
+    expect([pc.positionArray[3], pc.positionArray[4], pc.positionArray[5]]).toEqual([4, 5, 6]);
+    expect(pc.valueArray[0]).toBeCloseTo(0.25);
+    expect(pc.valueArray[1]).toBeCloseTo(0.75);
+  });
+
+  it('clear then addPoints rebuilds from slot 0 (supports per-frame layer rebuild)', () => {
+    const pc = new PointCloud({ capacity: 8, ramp, persistence: 'accumulate', colorMode: 'value' });
+    pc.addPoints(new Float32Array([9, 9, 9]), new Float32Array([0.5]));
+    pc.clear();
+    pc.addPoints(new Float32Array([1, 1, 1, 2, 2, 2]), new Float32Array([0.1, 0.2]));
+    expect(pc.count).toBe(2);
+    expect([pc.positionArray[0], pc.positionArray[1], pc.positionArray[2]]).toEqual([1, 1, 1]);
+  });
+
+  it('flags the written ranges for GPU upload', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate', colorMode: 'value' });
+    pc.addPoints(new Float32Array([1, 2, 3, 4, 5, 6]), new Float32Array([0.25, 0.75]));
+    const valAttr = pc.points.geometry.getAttribute('aValue') as THREE.BufferAttribute;
+    expect(valAttr.updateRanges).toEqual([{ start: 0, count: 2 }]);
+  });
+
+  it('ignores an empty batch', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate', colorMode: 'value' });
+    pc.addPoints(new Float32Array([]), new Float32Array([]));
+    expect(pc.count).toBe(0);
+  });
+});
