@@ -5,6 +5,9 @@ import { parseTwportXml, type VesselRecord } from './twport';
 
 const BASE = 'https://tpnet.twport.com.tw/IFAWeb/Reports/OpenData/GetOpenData';
 
+// Module-level decoder: fails fast on unsupported encoding instead of silently retrying.
+const BIG5 = new TextDecoder('big5');
+
 async function fetchType(type: number, source: 'berthing' | 'forecast'): Promise<VesselRecord[]> {
   const url = `${BASE}?port=KHH&type=${type}`;
   let lastErr: unknown;
@@ -12,8 +15,12 @@ async function fetchType(type: number, source: 'berthing' | 'forecast'): Promise
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`TWPort type=${type} HTTP ${res.status}`);
-      const xml = new TextDecoder('big5').decode(await res.arrayBuffer());
-      return parseTwportXml(xml, source);
+      const xml = BIG5.decode(await res.arrayBuffer());
+      const records = parseTwportXml(xml, source);
+      if (source === 'berthing' && records.length === 0) {
+        throw new Error(`TWPort type=${type} returned no <SHIP> records (${xml.length} bytes) — likely a maintenance/error page`);
+      }
+      return records;
     } catch (e) {
       lastErr = e;
       if (attempt < 3) {
@@ -26,9 +33,11 @@ async function fetchType(type: number, source: 'berthing' | 'forecast'): Promise
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// Stamp capturedAtMs BEFORE fetches — it represents the snapshot's reference "now".
+const capturedAtMs = Date.now();
 const berthing = await fetchType(1, 'berthing');
 const forecast = await fetchType(5, 'forecast');
-const capturedAtMs = Date.now();
 const out = { capturedAtMs, berthing, forecast };
 
 const dir = resolve(here, 'snapshots');
