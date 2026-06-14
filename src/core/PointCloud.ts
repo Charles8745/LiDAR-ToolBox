@@ -63,7 +63,7 @@ export class PointCloud {
         uFade: { value: opts.persistence === 'fade' ? 1 : 0 },
         uFadeDuration: { value: opts.fadeDuration ?? 6 },
         uColorMode: { value: opts.colorMode === 'value' ? 1 : 0 },
-        uMaxPointSize: { value: opts.maxPointSize ?? 5 },
+        uMaxPointSize: { value: Math.max(opts.maxPointSize ?? 5, opts.pointSize ?? 2, 1) },
       },
       vertexShader,
       fragmentShader,
