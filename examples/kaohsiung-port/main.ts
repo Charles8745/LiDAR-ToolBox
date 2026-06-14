@@ -73,7 +73,7 @@ const engine = new LidarEngine({
   cameraPosition: [cx, dist * 0.85, cz + dist * 0.75],
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
-  pointBudget: 1,
+  pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
 });
 engine.addLayer(basePC.points);
 engine.addLayer(shipPC.points);
@@ -91,7 +91,9 @@ const overlay = createOverlay(document.getElementById('overlay') as HTMLElement,
 function refresh(tMs: number) {
   currentMs = tMs;
   rebuildShips(tMs, colorBy, filter);
-  overlay.setKpi({ inPort: shipCenters.length, occupied: shipCenters.length, total: TOTAL_BERTHS, dateMs: tMs });
+  // KPI reflects actual occupancy at tMs; the type filter only hides vessels, it doesn't change reality.
+  const inPort = occupancyAt(intervals, tMs).size;
+  overlay.setKpi({ inPort, occupied: inPort, total: TOTAL_BERTHS, dateMs: tMs });
 }
 refresh(nowMs);
 

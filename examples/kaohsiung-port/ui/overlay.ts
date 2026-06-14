@@ -10,6 +10,9 @@ export function fmtClock(ms: number): string {
   return `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+/** Escape a raw data string before interpolating into innerHTML. */
+const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ESC[c]);
 
 export interface OverlayHandlers {
   onFilter(enabled: Set<string>): void;
@@ -68,12 +71,12 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     },
     showVessel(v) {
       card.style.display = 'block';
-      card.innerHTML = `<b style="color:#9fe">${v.nameZh} ${v.nameEn}</b>
-        <div style="margin-top:6px">船型:${v.shipType}</div>
-        <div>泊位:${v.wharfName}</div>
-        <div>前一港:${v.beforePort}</div>
-        <div>下一港:${v.nextPort}</div>
-        <div>IMO:${v.imo || '—'}</div>`;
+      card.innerHTML = `<b style="color:#9fe">${esc(v.nameZh)} ${esc(v.nameEn)}</b>
+        <div style="margin-top:6px">船型:${esc(v.shipType)}</div>
+        <div>泊位:${esc(v.wharfName)}</div>
+        <div>前一港:${esc(v.beforePort)}</div>
+        <div>下一港:${esc(v.nextPort)}</div>
+        <div>IMO:${esc(v.imo) || '—'}</div>`;
     },
     hideVessel() { card.style.display = 'none'; },
   };
