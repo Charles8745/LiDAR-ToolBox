@@ -17,6 +17,7 @@ export interface LidarEngineOptions {
   maxPointSize?: number;
   fadeDuration?: number;
   colorMode?: 'distance' | 'value';
+  sizeAttenuation?: boolean;
   cameraMode?: 'lookAround' | 'orbit';
   cameraPosition?: [number, number, number];
   cameraTarget?: [number, number, number];
@@ -81,6 +82,7 @@ export class LidarEngine {
       maxPointSize: opts.maxPointSize,
       fadeDuration: opts.fadeDuration,
       colorMode: opts.colorMode,
+      sizeAttenuation: opts.sizeAttenuation,
     });
     this.scene.add(this.pointCloud.points);
     this.emitter = opts.emitter ?? { emit: () => [] };

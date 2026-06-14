@@ -95,6 +95,15 @@ describe('PointCloud value/color mode', () => {
     expect(pc.valueArray.length).toBe(4);
     expect(pc.points.geometry.getAttribute('aValue')).toBeDefined();
   });
+
+  it('defaults to size attenuation on (uSizeAttenuation = 1)', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate' });
+    expect((pc as any)['material'].uniforms.uSizeAttenuation.value).toBe(1);
+  });
+  it('sizeAttenuation:false sets uSizeAttenuation = 0', () => {
+    const pc = new PointCloud({ capacity: 4, ramp, persistence: 'accumulate', sizeAttenuation: false });
+    expect((pc as any)['material'].uniforms.uSizeAttenuation.value).toBe(0);
+  });
 });
 
 describe('PointCloud.addPoints', () => {

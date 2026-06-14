@@ -13,6 +13,7 @@ export interface PointCloudOptions {
   fadeDuration?: number;
   colorMode?: 'distance' | 'value';
   maxPointSize?: number;
+  sizeAttenuation?: boolean;
 }
 
 /** GPU point store: a single THREE.Points backed by a FIFO ring buffer of preallocated attributes. */
@@ -64,6 +65,7 @@ export class PointCloud {
         uFadeDuration: { value: opts.fadeDuration ?? 6 },
         uColorMode: { value: opts.colorMode === 'value' ? 1 : 0 },
         uMaxPointSize: { value: Math.max(opts.maxPointSize ?? 5, opts.pointSize ?? 2, 1) },
+        uSizeAttenuation: { value: opts.sizeAttenuation === false ? 0 : 1 },
       },
       vertexShader,
       fragmentShader,
