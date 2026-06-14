@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 describe('frozen snapshot', () => {
   it('has a well-formed snapshot with berthing records at numbered berths', () => {
     const dir = resolve(__dirname, '../examples/kaohsiung-port/data/snapshots');
-    const files = readdirSync(dir).filter((f) => f.startsWith('khh-') && f.endsWith('.json')).sort();
+    const files = readdirSync(dir).filter((f: string) => f.startsWith('khh-') && f.endsWith('.json')).sort();
     const file = files[files.length - 1];
     expect(file, 'a khh-*.json snapshot must be committed').toBeDefined();
     const snap = JSON.parse(readFileSync(resolve(dir, file!), 'utf8'));

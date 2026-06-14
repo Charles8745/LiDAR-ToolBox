@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseOsmWays } from '../examples/kaohsiung-port/data/osm';
+import { parseOsmWays, type OverpassDoc } from '../examples/kaohsiung-port/data/osm';
 
-const OVERPASS = {
+const OVERPASS: OverpassDoc = {
   elements: [
     { type: 'way', tags: { natural: 'coastline' }, geometry: [{ lat: 22.6, lon: 120.27 }, { lat: 22.59, lon: 120.28 }] },
     { type: 'way', tags: { man_made: 'pier' }, geometry: [{ lat: 22.58, lon: 120.31 }, { lat: 22.575, lon: 120.31 }] },

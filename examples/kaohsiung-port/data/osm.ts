@@ -2,8 +2,8 @@ export interface LatLon { lat: number; lon: number; }
 export type Polyline = LatLon[];
 export interface OsmGeometry { coastline: Polyline[]; piers: Polyline[]; }
 
-interface OverpassEl { type: string; tags?: Record<string, string>; geometry?: LatLon[]; }
-interface OverpassDoc { elements: OverpassEl[]; }
+export interface OverpassEl { type: string; tags?: Record<string, string>; geometry?: LatLon[]; lat?: number; lon?: number; }
+export interface OverpassDoc { elements: OverpassEl[]; }
 
 /** Split Overpass `out geom` ways into coastline vs pier polylines. */
 export function parseOsmWays(doc: OverpassDoc): OsmGeometry {
