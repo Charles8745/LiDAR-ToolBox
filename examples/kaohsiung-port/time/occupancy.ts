@@ -9,11 +9,12 @@ const DEFAULT_STAY_MS = 12 * 3600_000;
 export function buildIntervals(vessels: VesselRecord[]): BerthInterval[] {
   const out: BerthInterval[] = [];
   for (const v of vessels) {
-    if (v.berthNo == null) continue;
+    const berthNo = v.berthNo;
+    if (berthNo == null) continue;
     const startMs = v.actPortMs ?? v.etaMs;
     if (startMs == null) continue;
     const endMs = v.leaveMs ?? v.etdMs ?? startMs + DEFAULT_STAY_MS;
-    out.push({ berthNo: v.berthNo, vessel: v, startMs, endMs: Math.max(endMs, startMs + 1) });
+    out.push({ berthNo, vessel: v, startMs, endMs: Math.max(endMs, startMs + 1) });
   }
   return out;
 }

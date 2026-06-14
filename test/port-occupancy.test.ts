@@ -32,4 +32,25 @@ describe('occupancy', () => {
     expect(berthStatusAt(intervals, 108, 9 * HOUR, 2 * HOUR)).toBe('incoming'); // arrives in 1h
     expect(berthStatusAt(intervals, 108, 2 * HOUR, 2 * HOUR)).toBe('free');     // arrival far off
   });
+
+  it('skips vessels with no berth or no arrival time', () => {
+    const r = buildIntervals([
+      rec({ nameZh: 'noBerth', berthNo: null, actPortMs: 0 }),
+      rec({ nameZh: 'noTime', berthNo: 5, actPortMs: null, etaMs: null }),
+    ]);
+    expect(r).toHaveLength(0);
+  });
+
+  it('defaults departure to arrival + 12h when no end time is given', () => {
+    const [iv] = buildIntervals([rec({ berthNo: 9, etaMs: 3 * HOUR })]);
+    expect(iv.endMs).toBe(3 * HOUR + 12 * HOUR);
+  });
+
+  it('occupancyAt: a later overlapping interval wins the berth', () => {
+    const ivs = buildIntervals([
+      rec({ nameZh: 'old', berthNo: 4, actPortMs: 0, leaveMs: 6 * HOUR }),
+      rec({ nameZh: 'new', berthNo: 4, actPortMs: 2 * HOUR, leaveMs: 8 * HOUR }),
+    ]);
+    expect(occupancyAt(ivs, 3 * HOUR).get(4)?.nameZh).toBe('new');
+  });
 });
