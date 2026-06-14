@@ -18,4 +18,11 @@ describe('public API', () => {
     const s = scannables.proceduralCave();
     expect(s.objects.length).toBeGreaterThan(0);
   });
+
+  it('exposes PointCloud, buildCategoryLUT and buildRampTextureFromFn', async () => {
+    const api = await import('../src/index');
+    expect(typeof (api as any).PointCloud).toBe('function');
+    expect(typeof (api as any).buildCategoryLUT).toBe('function');
+    expect(typeof (api as any).buildRampTextureFromFn).toBe('function');
+  });
 });

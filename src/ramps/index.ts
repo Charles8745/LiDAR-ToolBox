@@ -9,4 +9,4 @@ export const ramps = {
 
 export { sampleGradient } from './gradient';
 export type { ColorStop } from './gradient';
-export { buildRampTexture, buildRampTextureFromFn } from './lut';
+export { buildRampTexture, buildRampTextureFromFn, buildCategoryLUT } from './lut';

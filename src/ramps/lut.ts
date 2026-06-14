@@ -38,3 +38,23 @@ export function buildRampTextureFromFn(fn: (dist01: number) => RGB, width = 256)
   }
   return makeTexture(data, width);
 }
+
+/** Build a categorical LUT: one texel per color, NearestFilter (no blending). */
+export function buildCategoryLUT(colors: RGB[]): THREE.DataTexture {
+  if (colors.length < 1) throw new Error('buildCategoryLUT needs at least one color');
+  const width = Math.max(colors.length, 2); // DataTexture needs width >= 1; keep >=2 for safety
+  const data = new Uint8Array(new ArrayBuffer(width * 4));
+  for (let i = 0; i < width; i++) {
+    const [r, g, b] = colors[Math.min(i, colors.length - 1)];
+    data[i * 4 + 0] = Math.round(r);
+    data[i * 4 + 1] = Math.round(g);
+    data[i * 4 + 2] = Math.round(b);
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, width, 1, THREE.RGBAFormat);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
