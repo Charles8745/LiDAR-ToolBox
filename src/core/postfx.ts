@@ -83,8 +83,11 @@ export function createSelectiveBloom(
   return {
     render() {
       hideNonBloomed(scene, bloomLayer, hidden);
-      bloomComposer.render();
-      restoreHidden(hidden);
+      try {
+        bloomComposer.render();
+      } finally {
+        restoreHidden(hidden);
+      }
       finalComposer.render();
     },
     setSize(width, height) {
@@ -92,6 +95,8 @@ export function createSelectiveBloom(
       finalComposer.setSize(width, height);
     },
     dispose() {
+      for (const p of bloomComposer.passes) (p as { dispose?: () => void }).dispose?.();
+      for (const p of finalComposer.passes) (p as { dispose?: () => void }).dispose?.();
       bloomComposer.dispose();
       finalComposer.dispose();
     },
