@@ -1,0 +1,21 @@
+/* F0 戰情室主題 — 中性炭灰 (Ink Wash);UI 用銀鉻,飽和度留給船色。 */
+:root {
+  --ink: #F2F5F8;
+  --ink-dim: #93A0AD;
+  --signal-ok: #5FE39A;
+  --signal-warn: #FF8A4D;
+  /* Liquid Glass Kit token overrides */
+  --lg-accent: #CBD5DF;
+  --lg-text: #F2F5F8;
+  --lg-tint: rgba(32, 36, 43, 0.55);
+}
+html, body { background: #0B0C0E; color: var(--ink); }
+#overlay .lg, #overlay .lg-navbar, #overlay .lg-card, #overlay .lg-stat,
+#overlay .lg-gauge, #overlay .lg-chart { color: var(--ink); }
+
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-rise { animation: fade-rise 0.6s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .fade-rise { animation: none; } }
