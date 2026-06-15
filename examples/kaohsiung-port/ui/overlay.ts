@@ -59,9 +59,9 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   viewBtn.addEventListener('click', () => { mode = mode === 'type' ? 'status' : 'type'; handlers.onView(mode); });
   legend.appendChild(viewBtn);
   const bgBtn = document.createElement('button');
-  bgBtn.textContent = '🗺️ 地圖底圖:關';
+  bgBtn.textContent = '🗺️ 地圖底圖:開';
   bgBtn.style.cssText = 'margin-top:6px;width:100%;background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:6px;cursor:pointer';
-  let bgOn = false;
+  let bgOn = true;
   bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `🗺️ 地圖底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
   legend.appendChild(bgBtn);
   root.appendChild(legend);
