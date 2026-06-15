@@ -39,3 +39,28 @@ export function berthStatusAt(
   }
   return incoming ? 'incoming' : 'free';
 }
+
+/** In-port vessel count sampled at steps+1 evenly spaced times across [t0,t1]. */
+export function buildOccupancyTrend(intervals: BerthInterval[], t0: number, t1: number, steps: number): number[] {
+  if (steps < 1) return [occupancyAt(intervals, t0).size];
+  const out: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = t0 + ((t1 - t0) * i) / steps;
+    out.push(occupancyAt(intervals, t).size);
+  }
+  return out;
+}
+
+export interface IncomingArrival { berthNo: number; vessel: VesselRecord; etaMs: number; }
+
+/** Vessels arriving within (tMs, tMs+windowMs], soonest first. */
+export function buildIncomingList(intervals: BerthInterval[], tMs: number, windowMs: number): IncomingArrival[] {
+  const out: IncomingArrival[] = [];
+  for (const it of intervals) {
+    if (it.startMs > tMs && it.startMs <= tMs + windowMs) {
+      out.push({ berthNo: it.berthNo, vessel: it.vessel, etaMs: it.startMs });
+    }
+  }
+  out.sort((a, b) => a.etaMs - b.etaMs);
+  return out;
+}
