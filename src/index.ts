@@ -16,3 +16,5 @@ export type {
   ColorRamp,
   Persistence,
 } from './core/types';
+export { BLOOM_LAYER, createSelectiveBloom, hideNonBloomed, restoreHidden } from './core/postfx';
+export type { BloomOptions, SelectiveBloom } from './core/postfx';

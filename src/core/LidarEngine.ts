@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RaycastSampler } from './RaycastSampler';
 import { PointCloud } from './PointCloud';
+import { createSelectiveBloom, BLOOM_LAYER, type SelectiveBloom, type BloomOptions } from './postfx';
 import { buildRampTextureFromFn } from '../ramps/lut';
 import type { Emitter, Scannable, ColorRamp, Persistence, EmitContext } from './types';
 
@@ -23,6 +24,8 @@ export interface LidarEngineOptions {
   cameraTarget?: [number, number, number];
   cameraFar?: number;
   autoScan?: boolean;
+  fog?: { color?: number; near?: number; far?: number } | boolean;
+  bloom?: BloomOptions | boolean;
 }
 
 function resolveRamp(ramp: ColorRamp | undefined): THREE.Texture {
@@ -42,6 +45,7 @@ export class LidarEngine {
   private emitter: Emitter;
 
   private controls: OrbitControls | null = null;
+  private bloom: SelectiveBloom | null = null;
   private autoScan: boolean = true;
   private extraLayers: THREE.Object3D[] = [];
 
@@ -97,6 +101,15 @@ export class LidarEngine {
       this.camera.position.set(0, 0, 0);
       this.applyCameraRotation();
     }
+
+    if (opts.fog) {
+      const f = opts.fog === true ? {} : opts.fog;
+      this.scene.fog = new THREE.Fog(f.color ?? 0x0b0c0e, f.near ?? far * 0.4, f.far ?? far * 1.2);
+    }
+    if (opts.bloom) {
+      const b = opts.bloom === true ? {} : opts.bloom;
+      this.bloom = createSelectiveBloom(this.renderer, this.scene, this.camera, b);
+    }
   }
 
   private aspect(): number {
@@ -106,6 +119,7 @@ export class LidarEngine {
   resize(): void {
     const c = this.renderer.domElement;
     this.renderer.setSize(c.clientWidth, c.clientHeight, false);
+    if (this.bloom) this.bloom.setSize(c.clientWidth, c.clientHeight);
     if (this.camera) {
       this.camera.aspect = this.aspect();
       this.camera.updateProjectionMatrix();
@@ -151,7 +165,8 @@ export class LidarEngine {
     }
     this.controls?.update();
 
-    this.renderer.render(this.scene, this.camera);
+    if (this.bloom) this.bloom.render();
+    else this.renderer.render(this.scene, this.camera);
     this.rafId = requestAnimationFrame(this.loop);
   };
 
@@ -200,9 +215,10 @@ export class LidarEngine {
     this.pointCloud.setPersistence(persistence);
   }
 
-  /** Attach an app-owned object (e.g. another PointCloud's `.points`) to the scene. */
-  addLayer(obj: THREE.Object3D): void {
+  /** Attach an app-owned object to the scene. `opts.bloom` makes it glow under selective bloom. */
+  addLayer(obj: THREE.Object3D, opts?: { bloom?: boolean }): void {
     this.extraLayers.push(obj);
+    if (opts?.bloom) obj.layers.enable(BLOOM_LAYER);
     this.scene.add(obj);
   }
 
@@ -229,6 +245,7 @@ export class LidarEngine {
     this.pointCloud.dispose();
     this.ownedRamp?.dispose();
     this.controls?.dispose();
+    this.bloom?.dispose();
     for (const layer of this.extraLayers) {
       this.scene.remove(layer);
       const points = layer as THREE.Points;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emitters, ramps, scannables, PointCloud, buildCategoryLUT, buildRampTextureFromFn } from '../src/index';
+import { emitters, ramps, scannables, PointCloud, buildCategoryLUT, buildRampTextureFromFn, BLOOM_LAYER, createSelectiveBloom } from '../src/index';
 
 describe('public API', () => {
   it('exposes the three emitter factories', () => {
@@ -23,5 +23,12 @@ describe('public API', () => {
     expect(typeof PointCloud).toBe('function');
     expect(typeof buildCategoryLUT).toBe('function');
     expect(typeof buildRampTextureFromFn).toBe('function');
+  });
+});
+
+describe('bloom post-processing API', () => {
+  it('exposes BLOOM_LAYER and createSelectiveBloom', () => {
+    expect(BLOOM_LAYER).toBe(1);
+    expect(typeof createSelectiveBloom).toBe('function');
   });
 });
