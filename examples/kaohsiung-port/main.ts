@@ -147,7 +147,7 @@ function refresh(tMs: number) {
   overlay.setKpi({ inPort, occupied: inPort, total: TOTAL_BERTHS, dateMs: tMs });
   overlay.setIncoming(
     buildIncomingList(intervals, tMs, INCOMING_WINDOW).map((a) => ({
-      berthNo: a.berthNo, name: a.vessel.nameZh || a.vessel.nameEn, etaMs: a.etaMs,
+      berthNo: a.berthNo, name: a.vessel.nameZh || a.vessel.nameEn || '—', etaMs: a.etaMs,
     })),
   );
   overlay.setClock(tMs);

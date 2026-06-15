@@ -104,7 +104,9 @@ export class LidarEngine {
 
     if (opts.fog) {
       const f = opts.fog === true ? {} : opts.fog;
-      this.scene.fog = new THREE.Fog(f.color ?? 0x0b0c0e, f.near ?? far * 0.4, f.far ?? far * 1.2);
+      const fogColor = f.color ?? 0x0b0c0e;
+      this.scene.fog = new THREE.Fog(fogColor, f.near ?? far * 0.4, f.far ?? far * 1.2);
+      this.renderer.setClearColor(fogColor, 1);
     }
     if (opts.bloom) {
       const b = opts.bloom === true ? {} : opts.bloom;
