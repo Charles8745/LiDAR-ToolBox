@@ -7,11 +7,21 @@
   /* Liquid Glass Kit token overrides */
   --lg-accent: #CBD5DF;
   --lg-text: #F2F5F8;
-  --lg-tint: rgba(32, 36, 43, 0.55);
+  /* More opaque, slightly darker tint so the bright basemap/bloom behind the glass
+     does not wash the panels out (and text stays legible) under live refraction. */
+  --lg-tint: rgba(26, 29, 35, 0.74);
 }
 html, body { background: #0B0C0E; color: var(--ink); }
 #overlay .lg, #overlay .lg-navbar, #overlay .lg-card, #overlay .lg-stat,
 #overlay .lg-gauge, #overlay .lg-chart { color: var(--ink); }
+
+/* Consistent sizing: include padding in the rail-card width so panels line up. */
+#overlay .lg { box-sizing: border-box; }
+#overlay .lg-stat, #overlay .lg-card { padding: 12px; }
+
+/* Side rails: hide the scrollbar chrome (content still scrolls if it overflows). */
+#overlay .lg-rail { scrollbar-width: none; }
+#overlay .lg-rail::-webkit-scrollbar { width: 0; height: 0; }
 
 @keyframes fade-rise {
   from { opacity: 0; transform: translateY(16px); }

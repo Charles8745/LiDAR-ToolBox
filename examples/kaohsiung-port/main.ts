@@ -98,7 +98,7 @@ const engine = new LidarEngine({
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
-  bloom: { strength: 0.9, radius: 0.4, threshold: 0.0 },
+  bloom: { strength: 0.6, radius: 0.4, threshold: 0.18 },
   fog: { color: 0x0b0c0e, near: dist * 0.6, far: dist * 3.0 },
 });
 engine.addLayer(basePC.points);                  // context — no bloom
@@ -111,7 +111,7 @@ function buildBasemapPlane(): THREE.Mesh {
   const b = basemapMeta.bounds;
   const sw = proj.toWorld(b.s, b.w), ne = proj.toWorld(b.n, b.e);
   const pw = Math.abs(ne.x - sw.x), ph = Math.abs(ne.z - sw.z);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x2a2e33, transparent: true, depthWrite: false });
+  const mat = new THREE.MeshBasicMaterial({ color: 0x16191e, transparent: true, opacity: 0.9, depthWrite: false });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set((sw.x + ne.x) / 2, -0.5, (sw.z + ne.z) / 2);

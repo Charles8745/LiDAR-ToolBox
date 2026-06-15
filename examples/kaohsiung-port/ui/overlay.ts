@@ -40,35 +40,64 @@ export interface OverlayApi {
 export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): OverlayApi {
   root.innerHTML = '';
   const enabled = new Set<string>(SHIP_CATEGORIES);
+
+  // Staggered entrance applied to the four layout regions (not per-card, to avoid
+  // transform/scroll interaction inside the rails).
   let stagger = 0;
-  const place = (el: HTMLElement, css: string): HTMLElement => {
-    el.style.cssText = css;
+  const rise = <T extends HTMLElement>(el: T): T => {
     el.style.animationDelay = `${stagger.toFixed(2)}s`;
     el.classList.add('fade-rise');
     stagger += 0.08;
-    root.appendChild(el);
     return el;
   };
-  const glass = (cls: string, css: string): HTMLDivElement => {
+
+  // A fixed top/bottom glass bar.
+  const bar = (cls: string, css: string): HTMLDivElement => {
     const el = document.createElement('div');
     el.className = cls;
     el.setAttribute('data-lg', '');
-    return place(el, css) as HTMLDivElement;
+    el.style.cssText = css;
+    root.appendChild(rise(el));
+    return el;
+  };
+
+  // A side rail: a flex column that auto-stacks its cards (no hardcoded offsets, so
+  // cards can never overlap). pointer-events:none lets clicks fall through the gaps
+  // to the canvas (ship picking); each card re-enables pointer-events.
+  const makeRail = (side: 'left' | 'right'): HTMLDivElement => {
+    const r = document.createElement('div');
+    r.className = 'lg-rail';
+    r.style.cssText = `${side}:14px;top:70px;bottom:72px;width:200px;display:flex;flex-direction:column;`
+      + 'gap:12px;overflow-y:auto;overflow-x:hidden;pointer-events:none';
+    root.appendChild(rise(r));
+    return r;
+  };
+  const leftRail = makeRail('left');
+  const rightRail = makeRail('right');
+
+  // A glass card inside a rail: full rail width, clickable.
+  const card = (cls: string, parent: HTMLElement): HTMLDivElement => {
+    const el = document.createElement('div');
+    el.className = cls;
+    el.setAttribute('data-lg', '');
+    el.style.cssText = 'width:100%;pointer-events:auto;flex:0 0 auto';
+    parent.appendChild(el);
+    return el;
   };
 
   // TOP navbar
-  const nav = glass('lg lg-navbar', 'left:14px;right:14px;top:14px;height:44px;display:flex;align-items:center;gap:10px;padding:0 16px');
+  const nav = bar('lg lg-navbar', 'left:14px;right:14px;top:14px;height:44px;display:flex;align-items:center;gap:10px;padding:0 16px');
   nav.innerHTML = `<span class="lg-navbar__brand" style="font-weight:700">高雄港 IOC</span>
     <span style="color:var(--ink-dim);font-size:12px">· LiDAR 戰情室</span>
     <span class="lg-navbar__spacer" style="flex:1"></span>
     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--signal-ok);font-size:12px">
       <span style="width:7px;height:7px;border-radius:50%;background:var(--signal-ok);box-shadow:0 0 8px var(--signal-ok)"></span>LIVE</span>`;
   const clock = document.createElement('span');
-  clock.style.cssText = 'font-variant-numeric:tabular-nums;min-width:96px;text-align:right';
+  clock.style.cssText = 'margin-left:14px;font-variant-numeric:tabular-nums;min-width:96px;text-align:right';
   nav.appendChild(clock);
 
   // LEFT: in-port stat (+spark)
-  const stat = glass('lg lg-stat', 'left:14px;top:70px;width:172px;padding:12px');
+  const stat = card('lg lg-stat', leftRail);
   stat.innerHTML = `<span class="lg-stat__label">在港船舶</span>
     <div class="lg-stat__row"><span class="lg-stat__value" data-lg-value="0"></span></div>
     <svg class="lg-stat__spark" data-lg-spark="0,0"></svg>`;
@@ -76,14 +105,14 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   const statSpark = stat.querySelector('.lg-stat__spark') as SVGElement;
 
   // LEFT: occupancy gauge
-  const gauge = glass('lg lg-gauge', 'left:14px;top:176px;width:172px');
+  const gauge = card('lg lg-gauge', leftRail);
   gauge.setAttribute('data-lg-profile', 'circle');
   gauge.setAttribute('data-lg-value', '0');
   gauge.setAttribute('data-lg-unit', '%');
   gauge.setAttribute('data-lg-label', '泊位佔用');
 
   // LEFT: ship-type filter + view/backdrop toggles
-  const filter = glass('lg lg-card', 'left:14px;top:310px;width:172px;padding:12px');
+  const filter = card('lg lg-card', leftRail);
   filter.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">船型篩選</div>';
   SHIP_CATEGORIES.forEach((cat, i) => {
     const rowEl = document.createElement('label');
@@ -113,21 +142,22 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   filter.appendChild(bgBtn);
 
   // RIGHT: 24h trend chart
-  const chart = glass('lg lg-chart', 'right:14px;top:70px;width:190px');
+  const chart = card('lg lg-chart', rightRail);
   chart.innerHTML = `<div class="lg-chart__head"><h4 class="lg-chart__title">24h 在港趨勢</h4></div>
     <svg class="lg-chart__svg" data-lg-chart="line" data-lg-points="0,0"></svg>`;
   const chartSvg = chart.querySelector('.lg-chart__svg') as SVGElement;
 
   // RIGHT: incoming list
-  const incoming = glass('lg lg-card', 'right:14px;top:212px;width:190px;padding:12px');
+  const incoming = card('lg lg-card', rightRail);
   incoming.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港 · 2h</div><div data-rows></div>';
   const incRows = incoming.querySelector('[data-rows]') as HTMLElement;
 
-  // detail card (hidden until pick)
-  const card = glass('lg lg-card', 'right:14px;bottom:80px;width:200px;padding:12px;display:none');
+  // RIGHT: detail card (hidden until a ship is picked; stacks below the incoming list)
+  const detail = card('lg lg-card', rightRail);
+  detail.style.display = 'none';
 
   // BOTTOM timeline
-  const bar = glass('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
+  const timeline = bar('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
   const play = document.createElement('button');
   play.className = 'lg lg-btn lg-btn--icon'; play.setAttribute('data-lg', '');
   play.textContent = '▶';
@@ -135,7 +165,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   slider.type = 'range'; slider.style.flex = '1';
   const tclock = document.createElement('span');
   tclock.style.cssText = 'min-width:96px;text-align:right;font-variant-numeric:tabular-nums';
-  bar.append(play, slider, tclock);
+  timeline.append(play, slider, tclock);
 
   let playing = false; let timer = 0;
   function stopPlay() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
@@ -162,15 +192,15 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
       gauge.setAttribute('data-lg-value', String(pct));
     },
     showVessel(v) {
-      card.style.display = 'block';
-      card.innerHTML = `<b>${esc(v.nameZh)} ${esc(v.nameEn)}</b>
+      detail.style.display = 'block';
+      detail.innerHTML = `<b>${esc(v.nameZh)} ${esc(v.nameEn)}</b>
         <div style="margin-top:6px;font-size:12px">船型:${esc(v.shipType)}</div>
         <div style="font-size:12px">泊位:${esc(v.wharfName)}</div>
         <div style="font-size:12px">前一港:${esc(v.beforePort)}</div>
         <div style="font-size:12px">下一港:${esc(v.nextPort)}</div>
         <div style="font-size:12px">IMO:${esc(v.imo) || '—'}</div>`;
     },
-    hideVessel() { card.style.display = 'none'; },
+    hideVessel() { detail.style.display = 'none'; },
     setTimeRange({ minMs, maxMs, nowMs }) {
       slider.min = String(minMs); slider.max = String(maxMs); slider.value = String(nowMs);
     },
