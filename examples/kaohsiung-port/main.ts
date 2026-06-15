@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
 import { buildBaseLayer, buildShipLayer, sampleShipFootprint, type ShipLayerResult } from './scene/portPoints';
-import { buildIntervals, occupancyAt, berthStatusAt } from './time/occupancy';
+import { buildIntervals, occupancyAt, berthStatusAt, buildOccupancyTrend, buildIncomingList } from './time/occupancy';
 import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from './palette';
 import { MIN_BERTH, MAX_BERTH, berthPositionLatLon } from './berths';
 import { createOverlay } from './ui/overlay';
@@ -98,10 +98,12 @@ const engine = new LidarEngine({
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
+  bloom: { strength: 0.9, radius: 0.4, threshold: 0.0 },
+  fog: { color: 0x0b0c0e, near: dist * 0.6, far: dist * 3.0 },
 });
-engine.addLayer(basePC.points);
-engine.addLayer(shipPC.points);
-engine.addLayer(incPC.points);
+engine.addLayer(basePC.points);                  // context — no bloom
+engine.addLayer(shipPC.points, { bloom: true }); // ships glow
+engine.addLayer(incPC.points, { bloom: true });  // incoming markers glow
 
 // C backdrop: real NLSC aerial orthophoto (baked offline, see data/fetch-basemap.ts),
 // tinted at runtime via material color-multiply for the dark situation-room look.
@@ -109,7 +111,7 @@ function buildBasemapPlane(): THREE.Mesh {
   const b = basemapMeta.bounds;
   const sw = proj.toWorld(b.s, b.w), ne = proj.toWorld(b.n, b.e);
   const pw = Math.abs(ne.x - sw.x), ph = Math.abs(ne.z - sw.z);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x3a5a72, transparent: true, depthWrite: false });
+  const mat = new THREE.MeshBasicMaterial({ color: 0x2a2e33, transparent: true, depthWrite: false });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set((sw.x + ne.x) / 2, -0.5, (sw.z + ne.z) / 2);
@@ -143,9 +145,15 @@ function refresh(tMs: number) {
   rebuildIncoming(tMs);
   const inPort = occupancyAt(intervals, tMs).size;
   overlay.setKpi({ inPort, occupied: inPort, total: TOTAL_BERTHS, dateMs: tMs });
+  overlay.setIncoming(
+    buildIncomingList(intervals, tMs, INCOMING_WINDOW).map((a) => ({
+      berthNo: a.berthNo, name: a.vessel.nameZh || a.vessel.nameEn, etaMs: a.etaMs,
+    })),
+  );
   overlay.setClock(tMs);
 }
 overlay.setTimeRange({ minMs: nowMs - 12 * HOUR, maxMs: nowMs + 12 * HOUR, nowMs });
+overlay.setTrend(buildOccupancyTrend(intervals, nowMs - 12 * HOUR, nowMs + 12 * HOUR, 24));
 refresh(nowMs);
 
 // Click-to-pick the nearest ship centroid (screen-space).

@@ -1,21 +1,24 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-lg-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>高雄港 LiDAR 數位孿生</title>
+    <title>高雄港 LiDAR 戰情室</title>
+    <link rel="stylesheet" href="./ui/liquid-glass.css" />
+    <link rel="stylesheet" href="./ui/theme.css" />
     <style>
-      html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden;
-        font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; color: #cfe; }
+      html, body { margin: 0; height: 100%; overflow: hidden;
+        font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
       #view { display: block; width: 100vw; height: 100vh; }
       #overlay { position: fixed; inset: 0; pointer-events: none; }
-      #overlay .panel { position: fixed; background: rgba(10,16,24,.82); border: 1px solid #213040;
-        border-radius: 8px; pointer-events: auto; font-size: 12px; }
+      #overlay > * { position: fixed; pointer-events: auto; }
     </style>
   </head>
   <body>
     <canvas id="view"></canvas>
     <div id="overlay"></div>
+    <script src="./ui/liquid-glass.js"></script>
+    <script>window.LiquidGlass && window.LiquidGlass.init && window.LiquidGlass.init();</script>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
