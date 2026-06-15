@@ -19,6 +19,7 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
       return Buffer.from(await res.arrayBuffer());
     } catch (e) {
       lastErr = e;
+      console.warn(`retry ${attempt + 1}/3 tile z=${z} x=${x} y=${y}: ${e}`);
       await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
     }
   }
@@ -28,10 +29,8 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
 const range = tileRangeForBbox(BBOX, Z);
 const { bounds, sizePx } = compositeBounds(range, Z);
 
-// Probe the NW tile first — fail fast with a clear message if zoom is unavailable.
-await fetchTile(Z, range.xMin, range.yMin);
-
 const layers: sharp.OverlayOptions[] = [];
+// First iteration (xMin,yMin = NW tile) doubles as the fail-fast zoom-availability probe.
 for (let x = range.xMin; x <= range.xMax; x++) {
   for (let y = range.yMin; y <= range.yMax; y++) {
     const buf = await fetchTile(Z, x, y);
