@@ -89,7 +89,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     const rowEl = document.createElement('label');
     rowEl.style.cssText = 'display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:12px';
     rowEl.innerHTML = `<input type="checkbox" checked>
-      <span style="width:9px;height:9px;border-radius:50%;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${cat}`;
+      <span style="width:9px;height:9px;border-radius:50%;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${esc(cat)}`;
     const cb = rowEl.querySelector('input') as HTMLInputElement;
     cb.addEventListener('change', () => {
       if (cb.checked) enabled.add(cat); else enabled.delete(cat);
@@ -141,6 +141,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   function stopPlay() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
   slider.addEventListener('input', () => { stopPlay(); handlers.onScrub(+slider.value); });
   play.addEventListener('click', () => {
+    if (timer) cancelAnimationFrame(timer);
     playing = !playing; play.textContent = playing ? '⏸' : '▶';
     const stepFn = () => {
       if (!playing) return;
