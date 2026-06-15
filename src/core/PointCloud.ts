@@ -57,6 +57,9 @@ export class PointCloud {
 
     this.material = new THREE.ShaderMaterial({
       uniforms: {
+        // fog_* uniforms the built-in fog chunks read; a raw ShaderMaterial does not
+        // get these automatically, so merge them in (cloned to avoid cross-instance sharing).
+        ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
         uRamp: { value: opts.ramp },
         uTime: { value: 0 },
         uMaxDistance: { value: opts.maxDistance ?? 30 },

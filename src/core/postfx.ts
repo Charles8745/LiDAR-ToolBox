@@ -49,7 +49,11 @@ export function createSelectiveBloom(
   bloomLayer.set(BLOOM_LAYER);
   const hidden: THREE.Object3D[] = [];
 
-  const renderPass = new RenderPass(scene, camera);
+  // The bloom pass must render bloom-layer objects on PURE BLACK — otherwise the
+  // (non-black) renderer clear color passes the bloom high-pass and floods the whole
+  // frame to grey. The final pass keeps the renderer's real clear color.
+  const bloomRenderPass = new RenderPass(scene, camera, undefined, new THREE.Color(0x000000), 1);
+  const finalRenderPass = new RenderPass(scene, camera);
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(size.x, size.y),
     opts.strength ?? 0.9,
@@ -59,7 +63,7 @@ export function createSelectiveBloom(
 
   const bloomComposer = new EffectComposer(renderer);
   bloomComposer.renderToScreen = false;
-  bloomComposer.addPass(renderPass);
+  bloomComposer.addPass(bloomRenderPass);
   bloomComposer.addPass(bloomPass);
 
   const mixPass = new ShaderPass(
@@ -76,7 +80,7 @@ export function createSelectiveBloom(
   mixPass.needsSwap = true;
 
   const finalComposer = new EffectComposer(renderer);
-  finalComposer.addPass(renderPass);
+  finalComposer.addPass(finalRenderPass);
   finalComposer.addPass(mixPass);
   finalComposer.addPass(new OutputPass());
 

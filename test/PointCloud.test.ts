@@ -147,6 +147,12 @@ describe('PointCloud.addPoints', () => {
 describe('PointCloud fog flag', () => {
   it('enables three built-in fog on the material (inert until scene.fog is set)', () => {
     const pc = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate' });
-    expect((pc.points.material as THREE.ShaderMaterial).fog).toBe(true);
+    const mat = pc.points.material as THREE.ShaderMaterial;
+    expect(mat.fog).toBe(true);
+    // The fog GLSL chunks read fogColor/fogNear/fogFar; a raw ShaderMaterial must
+    // carry these uniforms or the renderer throws in refreshFogUniforms once scene.fog is set.
+    expect(mat.uniforms.fogColor).toBeDefined();
+    expect(mat.uniforms.fogNear).toBeDefined();
+    expect(mat.uniforms.fogFar).toBeDefined();
   });
 });
