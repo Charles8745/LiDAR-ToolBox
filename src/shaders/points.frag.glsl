@@ -7,6 +7,8 @@ varying float vDist01;
 varying float vValue01;
 varying float vAge;
 
+#include <fog_pars_fragment>
+
 void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
@@ -21,4 +23,5 @@ void main() {
     if (alpha < 0.01) discard;
   }
   gl_FragColor = vec4(col, alpha);
+  #include <fog_fragment>
 }

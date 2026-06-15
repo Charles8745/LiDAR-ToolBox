@@ -72,6 +72,7 @@ export class PointCloud {
       transparent: true,
       depthWrite: true,
       blending: THREE.NormalBlending,
+      fog: true,
     });
 
     this.points = new THREE.Points(this.geometry, this.material);

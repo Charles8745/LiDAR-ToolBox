@@ -143,3 +143,10 @@ describe('PointCloud.addPoints', () => {
     expect(pc.count).toBe(0);
   });
 });
+
+describe('PointCloud fog flag', () => {
+  it('enables three built-in fog on the material (inert until scene.fog is set)', () => {
+    const pc = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate' });
+    expect((pc.points.material as THREE.ShaderMaterial).fog).toBe(true);
+  });
+});
