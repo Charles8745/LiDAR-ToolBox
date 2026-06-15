@@ -9,9 +9,16 @@ export function fmtClock(ms: number): string {
   const d = new Date(ms + TAIPEI_MS);
   return `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
+const hm = (ms: number) => fmtClock(ms).slice(-5);
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ESC[c]);
+
+declare global {
+  interface Window {
+    LiquidGlass?: { init?: (c?: unknown) => void; attach?: (el: Element) => void; refresh?: () => void };
+  }
+}
 
 export interface OverlayHandlers {
   onFilter(enabled: Set<string>): void;
@@ -19,74 +26,120 @@ export interface OverlayHandlers {
   onScrub(tMs: number): void;
   onBackdrop(on: boolean): void;
 }
+export interface IncomingItem { berthNo: number; name: string; etaMs: number; }
 export interface OverlayApi {
   setKpi(opts: { inPort: number; occupied: number; total: number; dateMs: number }): void;
   showVessel(v: VesselRecord): void;
   hideVessel(): void;
   setTimeRange(opts: { minMs: number; maxMs: number; nowMs: number }): void;
   setClock(ms: number): void;
+  setTrend(points: number[]): void;
+  setIncoming(items: IncomingItem[]): void;
 }
 
 export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): OverlayApi {
   root.innerHTML = '';
   const enabled = new Set<string>(SHIP_CATEGORIES);
+  let stagger = 0;
+  const place = (el: HTMLElement, css: string): HTMLElement => {
+    el.style.cssText = css;
+    el.style.animationDelay = `${stagger.toFixed(2)}s`;
+    el.classList.add('fade-rise');
+    stagger += 0.08;
+    root.appendChild(el);
+    return el;
+  };
+  const glass = (cls: string, css: string): HTMLDivElement => {
+    const el = document.createElement('div');
+    el.className = cls;
+    el.setAttribute('data-lg', '');
+    return place(el, css) as HTMLDivElement;
+  };
 
-  const kpi = document.createElement('div');
-  kpi.className = 'panel';
-  kpi.style.cssText = 'left:12px;top:12px;right:12px;padding:8px 12px;display:flex;gap:14px;align-items:center';
-  root.appendChild(kpi);
+  // TOP navbar
+  const nav = glass('lg lg-navbar', 'left:14px;right:14px;top:14px;height:44px;display:flex;align-items:center;gap:10px;padding:0 16px');
+  nav.innerHTML = `<span class="lg-navbar__brand" style="font-weight:700">高雄港 IOC</span>
+    <span style="color:var(--ink-dim);font-size:12px">· LiDAR 戰情室</span>
+    <span class="lg-navbar__spacer" style="flex:1"></span>
+    <span style="display:inline-flex;align-items:center;gap:6px;color:var(--signal-ok);font-size:12px">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--signal-ok);box-shadow:0 0 8px var(--signal-ok)"></span>LIVE</span>`;
+  const clock = document.createElement('span');
+  clock.style.cssText = 'font-variant-numeric:tabular-nums;min-width:96px;text-align:right';
+  nav.appendChild(clock);
 
-  const legend = document.createElement('div');
-  legend.className = 'panel';
-  legend.style.cssText = 'left:12px;top:60px;width:160px;padding:10px';
-  legend.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">船型篩選</div>';
+  // LEFT: in-port stat (+spark)
+  const stat = glass('lg lg-stat', 'left:14px;top:70px;width:172px;padding:12px');
+  stat.innerHTML = `<span class="lg-stat__label">在港船舶</span>
+    <div class="lg-stat__row"><span class="lg-stat__value" data-lg-value="0"></span></div>
+    <svg class="lg-stat__spark" data-lg-spark="0,0"></svg>`;
+  const statValue = stat.querySelector('.lg-stat__value') as HTMLElement;
+  const statSpark = stat.querySelector('.lg-stat__spark') as SVGElement;
+
+  // LEFT: occupancy gauge
+  const gauge = glass('lg lg-gauge', 'left:14px;top:176px;width:172px');
+  gauge.setAttribute('data-lg-profile', 'circle');
+  gauge.setAttribute('data-lg-value', '0');
+  gauge.setAttribute('data-lg-unit', '%');
+  gauge.setAttribute('data-lg-label', '泊位佔用');
+
+  // LEFT: ship-type filter + view/backdrop toggles
+  const filter = glass('lg lg-card', 'left:14px;top:310px;width:172px;padding:12px');
+  filter.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">船型篩選</div>';
   SHIP_CATEGORIES.forEach((cat, i) => {
-    const row = document.createElement('label');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer';
-    row.innerHTML = `<input type="checkbox" checked>
+    const rowEl = document.createElement('label');
+    rowEl.style.cssText = 'display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:12px';
+    rowEl.innerHTML = `<input type="checkbox" checked>
       <span style="width:9px;height:9px;border-radius:50%;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${cat}`;
-    const cb = row.querySelector('input')!;
+    const cb = rowEl.querySelector('input') as HTMLInputElement;
     cb.addEventListener('change', () => {
       if (cb.checked) enabled.add(cat); else enabled.delete(cat);
       handlers.onFilter(new Set(enabled));
     });
-    legend.appendChild(row);
+    filter.appendChild(rowEl);
   });
-  const viewBtn = document.createElement('button');
-  viewBtn.textContent = '檢視:船型 ↔ 狀態';
-  viewBtn.style.cssText = 'margin-top:8px;width:100%;background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:6px;cursor:pointer';
   let mode: 'type' | 'status' = 'type';
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'lg lg-btn lg-btn--sm'; viewBtn.setAttribute('data-lg', '');
+  viewBtn.textContent = '檢視:船型 ↔ 狀態';
+  viewBtn.style.cssText = 'margin-top:8px;width:100%';
   viewBtn.addEventListener('click', () => { mode = mode === 'type' ? 'status' : 'type'; handlers.onView(mode); });
-  legend.appendChild(viewBtn);
-  const bgBtn = document.createElement('button');
-  bgBtn.textContent = '🗺️ 地圖底圖:開';
-  bgBtn.style.cssText = 'margin-top:6px;width:100%;background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:6px;cursor:pointer';
+  filter.appendChild(viewBtn);
   let bgOn = true;
-  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `🗺️ 地圖底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
-  legend.appendChild(bgBtn);
-  root.appendChild(legend);
+  const bgBtn = document.createElement('button');
+  bgBtn.className = 'lg lg-btn lg-btn--sm'; bgBtn.setAttribute('data-lg', '');
+  bgBtn.textContent = '🗺️ 底圖:開';
+  bgBtn.style.cssText = 'margin-top:6px;width:100%';
+  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `🗺️ 底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
+  filter.appendChild(bgBtn);
 
-  const card = document.createElement('div');
-  card.className = 'panel';
-  card.style.cssText = 'right:12px;top:60px;width:200px;padding:10px;display:none';
-  root.appendChild(card);
+  // RIGHT: 24h trend chart
+  const chart = glass('lg lg-chart', 'right:14px;top:70px;width:190px');
+  chart.innerHTML = `<div class="lg-chart__head"><h4 class="lg-chart__title">24h 在港趨勢</h4></div>
+    <svg class="lg-chart__svg" data-lg-chart="line" data-lg-points="0,0"></svg>`;
+  const chartSvg = chart.querySelector('.lg-chart__svg') as SVGElement;
 
-  // Bottom time slider (24h scrub + play).
-  const bar = document.createElement('div');
-  bar.className = 'panel';
-  bar.style.cssText = 'left:12px;right:12px;bottom:12px;padding:8px 12px;display:flex;gap:10px;align-items:center';
+  // RIGHT: incoming list
+  const incoming = glass('lg lg-card', 'right:14px;top:212px;width:190px;padding:12px');
+  incoming.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港 · 2h</div><div data-rows></div>';
+  const incRows = incoming.querySelector('[data-rows]') as HTMLElement;
+
+  // detail card (hidden until pick)
+  const card = glass('lg lg-card', 'right:14px;bottom:80px;width:200px;padding:12px;display:none');
+
+  // BOTTOM timeline
+  const bar = glass('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
   const play = document.createElement('button');
+  play.className = 'lg lg-btn lg-btn--icon'; play.setAttribute('data-lg', '');
   play.textContent = '▶';
-  play.style.cssText = 'background:#0e1622;color:#9fe;border:1px solid #223247;border-radius:6px;padding:4px 9px;cursor:pointer';
   const slider = document.createElement('input');
   slider.type = 'range'; slider.style.flex = '1';
-  const clock = document.createElement('span'); clock.style.cssText = 'min-width:92px;text-align:right;color:#9fe';
-  bar.append(play, slider, clock);
-  root.appendChild(bar);
+  const tclock = document.createElement('span');
+  tclock.style.cssText = 'min-width:96px;text-align:right;font-variant-numeric:tabular-nums';
+  bar.append(play, slider, tclock);
 
   let playing = false; let timer = 0;
-  function stop() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
-  slider.addEventListener('input', () => { stop(); handlers.onScrub(+slider.value); });
+  function stopPlay() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
+  slider.addEventListener('input', () => { stopPlay(); handlers.onScrub(+slider.value); });
   play.addEventListener('click', () => {
     playing = !playing; play.textContent = playing ? '⏸' : '▶';
     const stepFn = () => {
@@ -98,26 +151,39 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     if (playing) timer = requestAnimationFrame(stepFn);
   });
 
+  // Enhance freshly-built glass nodes (no-op in non-Chromium / if kit absent).
+  window.LiquidGlass?.refresh?.();
+
   return {
-    setKpi({ inPort, occupied, total, dateMs }) {
-      kpi.innerHTML = `<b style="color:#9fe">高雄港 · LiDAR 數位孿生</b>
-        <span>在港船 <b>${inPort}</b></span>
-        <span>泊位佔用 <b>${occupied}/${total}</b></span>
-        <span style="margin-left:auto">${fmtClock(dateMs)}</span>`;
+    setKpi({ inPort, occupied, total }) {
+      statValue.setAttribute('data-lg-value', String(inPort));
+      const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+      gauge.setAttribute('data-lg-value', String(pct));
     },
     showVessel(v) {
       card.style.display = 'block';
-      card.innerHTML = `<b style="color:#9fe">${esc(v.nameZh)} ${esc(v.nameEn)}</b>
-        <div style="margin-top:6px">船型:${esc(v.shipType)}</div>
-        <div>泊位:${esc(v.wharfName)}</div>
-        <div>前一港:${esc(v.beforePort)}</div>
-        <div>下一港:${esc(v.nextPort)}</div>
-        <div>IMO:${esc(v.imo) || '—'}</div>`;
+      card.innerHTML = `<b>${esc(v.nameZh)} ${esc(v.nameEn)}</b>
+        <div style="margin-top:6px;font-size:12px">船型:${esc(v.shipType)}</div>
+        <div style="font-size:12px">泊位:${esc(v.wharfName)}</div>
+        <div style="font-size:12px">前一港:${esc(v.beforePort)}</div>
+        <div style="font-size:12px">下一港:${esc(v.nextPort)}</div>
+        <div style="font-size:12px">IMO:${esc(v.imo) || '—'}</div>`;
     },
     hideVessel() { card.style.display = 'none'; },
     setTimeRange({ minMs, maxMs, nowMs }) {
       slider.min = String(minMs); slider.max = String(maxMs); slider.value = String(nowMs);
     },
-    setClock(ms) { clock.textContent = fmtClock(ms); },
+    setClock(ms) { clock.textContent = fmtClock(ms); tclock.textContent = fmtClock(ms); },
+    setTrend(points) {
+      const pts = points.length ? points : [0, 0];
+      chartSvg.setAttribute('data-lg-points', pts.join(','));
+      statSpark.setAttribute('data-lg-spark', pts.slice(-12).join(','));
+    },
+    setIncoming(items) {
+      if (!items.length) { incRows.innerHTML = '<div style="opacity:.5;font-size:12px">— 無 —</div>'; return; }
+      incRows.innerHTML = items.slice(0, 6).map((it) => `
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid rgba(120,140,160,.12)">
+          <span>#${it.berthNo} ${esc(it.name)}</span><span style="color:var(--signal-warn)">${hm(it.etaMs)}</span></div>`).join('');
+    },
   };
 }
