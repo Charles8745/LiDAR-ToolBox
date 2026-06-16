@@ -30,6 +30,10 @@ const TOTAL_BERTHS = MAX_BERTH - MIN_BERTH + 1;
 const HOUR = 3600_000;
 const INCOMING_WINDOW = 2 * HOUR;
 
+// 進港標記的顏色與閃爍頻率 —— 直接改這兩個值。
+const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(目前琥珀)
+const INCOMING_PULSE_HZ = 0.8; // 每秒閃幾次(0 = 不閃)
+
 // Static base layer (coastline + piers), constant-size points.
 const base = buildBaseLayer(osm.coastline, osm.piers, proj);
 const basePC = new PointCloud({
@@ -60,8 +64,9 @@ function rebuildShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string
 
 // Incoming-berth markers (amber): berths with a vessel arriving within INCOMING_WINDOW.
 const incPC = new PointCloud({
-  capacity: 40_000, ramp: shipStatusLUT,
+  capacity: 40_000, ramp: buildCategoryLUT([INCOMING_COLOR]),
   persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
+  pulseHz: INCOMING_PULSE_HZ,
 });
 const INCOMING_VAL = valueFor(statusIndex('incoming'), STATUS_COLORS.length);
 function rebuildIncoming(tMs: number) {
@@ -98,12 +103,16 @@ const engine = new LidarEngine({
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
-  bloom: { strength: 0.6, radius: 0.4, threshold: 0.18 },
-  fog: { color: 0x0b0c0e, near: dist * 0.6, far: dist * 3.0 },
+  bloom: [
+    { layer: 1, strength: 0.3, radius: 0.1, threshold: 0.1 },  // 群組1=船:收斂光暈
+    { layer: 2, strength: 1.1, radius: 0.5, threshold: 0.0 },  // 群組2=進港標記:更亮、更外擴
+    { layer: 3, strength: 0.05, radius: 0.1, threshold: 0.0}
+  ],
+  fog: { color: 0x0b0c0e, near: dist * 0.1, far: dist * 5.0 },
 });
-engine.addLayer(basePC.points);                  // context — no bloom
-engine.addLayer(shipPC.points, { bloom: true }); // ships glow
-engine.addLayer(incPC.points, { bloom: true });  // incoming markers glow
+engine.addLayer(basePC.points, { bloom: 3});   // 輪廓點
+engine.addLayer(shipPC.points, { bloom: 1 });  // 船 → bloom 群組 1
+engine.addLayer(incPC.points, { bloom: 2 });   // 進港標記 → bloom 群組 2
 
 // C backdrop: real NLSC aerial orthophoto (baked offline, see data/fetch-basemap.ts),
 // tinted at runtime via material color-multiply for the dark situation-room look.
@@ -111,7 +120,7 @@ function buildBasemapPlane(): THREE.Mesh {
   const b = basemapMeta.bounds;
   const sw = proj.toWorld(b.s, b.w), ne = proj.toWorld(b.n, b.e);
   const pw = Math.abs(ne.x - sw.x), ph = Math.abs(ne.z - sw.z);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x16191e, transparent: true, opacity: 0.9, depthWrite: false });
+  const mat = new THREE.MeshBasicMaterial({ color: 0x2a2e33, transparent: true, opacity:1, depthWrite: false });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set((sw.x + ne.x) / 2, -0.5, (sw.z + ne.z) / 2);

@@ -9,11 +9,12 @@
   --lg-text: #F2F5F8;
   /* More opaque, slightly darker tint so the bright basemap/bloom behind the glass
      does not wash the panels out (and text stays legible) under live refraction. */
-  --lg-tint: rgba(26, 29, 35, 0.74);
+  --lg-tint: rgba(26, 29, 35, 0.1);
 }
 html, body { background: #0B0C0E; color: var(--ink); }
 #overlay .lg, #overlay .lg-navbar, #overlay .lg-card, #overlay .lg-stat,
 #overlay .lg-gauge, #overlay .lg-chart { color: var(--ink); }
+
 
 /* Consistent sizing: include padding in the rail-card width so panels line up. */
 #overlay .lg { box-sizing: border-box; }
@@ -22,6 +23,9 @@ html, body { background: #0B0C0E; color: var(--ink); }
 /* Side rails: hide the scrollbar chrome (content still scrolls if it overflows). */
 #overlay .lg-rail { scrollbar-width: none; }
 #overlay .lg-rail::-webkit-scrollbar { width: 0; height: 0; }
+
+/**/
+#overlay .lg-btn--icon { width: 30px; height: 30px; }        /* ▶ 播放鈕 */
 
 @keyframes fade-rise {
   from { opacity: 0; transform: translateY(16px); }
