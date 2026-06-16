@@ -16,7 +16,7 @@ const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ESC[c]);
 
 declare global {
   interface Window {
-    LiquidGlass?: { init?: (c?: unknown) => void; attach?: (el: Element) => void; refresh?: () => void };
+    LiquidGlass?: { init?: (c?: unknown) => void; attach?: (el: Element) => void; refresh?: () => void; supported?: boolean };
   }
 }
 
@@ -61,14 +61,16 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     return el;
   };
 
-  // A side rail: a flex column that auto-stacks its cards (no hardcoded offsets, so
-  // cards can never overlap). pointer-events:none lets clicks fall through the gaps
-  // to the canvas (ship picking); each card re-enables pointer-events.
+  // A side rail: a flex column that auto-stacks its cards (no hardcoded offsets, so cards
+  // can never overlap). pointer-events:none lets clicks fall through the gaps to the canvas
+  // (ship picking); each card re-enables pointer-events. The rail sizes to its content (no
+  // fixed height, no overflow scroll) — an `overflow != visible` ancestor is one thing that
+  // can disturb descendant backdrop-filter compositing, so we keep it `visible`.
   const makeRail = (side: 'left' | 'right'): HTMLDivElement => {
     const r = document.createElement('div');
     r.className = 'lg-rail';
-    r.style.cssText = `${side}:14px;top:70px;bottom:72px;width:200px;display:flex;flex-direction:column;`
-      + 'gap:12px;overflow-y:auto;overflow-x:hidden;pointer-events:none';
+    r.style.cssText = `${side}:14px;top:70px;width:200px;display:flex;flex-direction:column;`
+      + 'gap:12px;pointer-events:none';
     root.appendChild(rise(r));
     return r;
   };
@@ -96,6 +98,15 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   clock.style.cssText = 'margin-left:14px;font-variant-numeric:tabular-nums;min-width:96px;text-align:right';
   nav.appendChild(clock);
 
+  // LEFT: occupancy gauge
+  const gauge = card('lg lg-gauge', leftRail);
+  gauge.setAttribute('data-lg-profile', 'circle');
+  gauge.setAttribute('data-lg-value', '0');
+  gauge.setAttribute('data-lg-unit', '%');
+  gauge.setAttribute('data-lg-label', '泊位佔用');
+  gauge.style.width = '140px';
+  gauge.style.alignSelf = 'center';
+
   // LEFT: in-port stat (+spark)
   const stat = card('lg lg-stat', leftRail);
   stat.innerHTML = `<span class="lg-stat__label">在港船舶</span>
@@ -103,13 +114,6 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     <svg class="lg-stat__spark" data-lg-spark="0,0"></svg>`;
   const statValue = stat.querySelector('.lg-stat__value') as HTMLElement;
   const statSpark = stat.querySelector('.lg-stat__spark') as SVGElement;
-
-  // LEFT: occupancy gauge
-  const gauge = card('lg lg-gauge', leftRail);
-  gauge.setAttribute('data-lg-profile', 'circle');
-  gauge.setAttribute('data-lg-value', '0');
-  gauge.setAttribute('data-lg-unit', '%');
-  gauge.setAttribute('data-lg-label', '泊位佔用');
 
   // LEFT: ship-type filter + view/backdrop toggles
   const filter = card('lg lg-card', leftRail);
@@ -136,9 +140,9 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   let bgOn = true;
   const bgBtn = document.createElement('button');
   bgBtn.className = 'lg lg-btn lg-btn--sm'; bgBtn.setAttribute('data-lg', '');
-  bgBtn.textContent = '🗺️ 底圖:開';
+  bgBtn.textContent = '底圖:開';
   bgBtn.style.cssText = 'margin-top:6px;width:100%';
-  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `🗺️ 底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
+  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
   filter.appendChild(bgBtn);
 
   // RIGHT: 24h trend chart
@@ -160,6 +164,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   const timeline = bar('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
   const play = document.createElement('button');
   play.className = 'lg lg-btn lg-btn--icon'; play.setAttribute('data-lg', '');
+  
   play.textContent = '▶';
   const slider = document.createElement('input');
   slider.type = 'range'; slider.style.flex = '1';
@@ -182,8 +187,72 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     if (playing) timer = requestAnimationFrame(stepFn);
   });
 
-  // Enhance freshly-built glass nodes (no-op in non-Chromium / if kit absent).
-  window.LiquidGlass?.refresh?.();
+  // Force the live-glass refraction to composite.
+  //
+  // Root cause: the kit feeds each filter's <feImage> a canvas→PNG data-URI displacement
+  // map that Chromium decodes ASYNCHRONOUSLY; the panel's `backdrop-filter` effect node is
+  // rasterized at first paint BEFORE that decode lands and is never rebuilt — so panels show
+  // only the flat .lg tint (no refraction) until a real stylesheet change forces a
+  // document-wide recalc (which is exactly why saving theme.css "revived" it: Vite swaps the
+  // <link>, changing the active-stylesheet set). JS inline / CSS-var nudges are a
+  // single-element fast-path recalc and don't help.
+  //
+  // The reliable revival (user-verified) is, across two frames: tear down each panel's
+  // backdrop-filter (drop the stale node) → restore it AND clone+cache-bust+swap a
+  // same-origin <link rel=stylesheet> (an active-stylesheet-set change, like Vite's CSS
+  // HMR). Crucial: it must run AFTER the feImage PNGs have decoded — doing it a couple of
+  // frames after build (pre-decode) silently misses, which is why the earlier attempt failed.
+  const reviveGlass = (): void => {
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-lg]'));
+    if (!panels.length) return;
+    const saved = panels.map((el) => ({
+      el, bf: el.style.backdropFilter, wbf: el.style.getPropertyValue('-webkit-backdrop-filter'),
+    }));
+    // frame 1: drop the stale (un-composited) backdrop-filter effect node
+    saved.forEach((s) => {
+      if (s.bf || s.wbf) {
+        s.el.style.backdropFilter = 'none';
+        s.el.style.setProperty('-webkit-backdrop-filter', 'none');
+      }
+    });
+    requestAnimationFrame(() => {
+      // frame 2: restore the inline filters …
+      saved.forEach((s) => {
+        if (s.bf) s.el.style.backdropFilter = s.bf;
+        if (s.wbf) s.el.style.setProperty('-webkit-backdrop-filter', s.wbf);
+      });
+      // … then force a document-wide recalc via an active-stylesheet-set change.
+      const link = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+        .reverse()
+        .find((e) => { try { return new URL(e.href).origin === location.origin; } catch { return false; } });
+      if (!link) return;
+      const base = link.href.split('?')[0];
+      const clone = link.cloneNode() as HTMLLinkElement;
+      clone.href = `${base}${base.includes('?') ? '&' : '?'}lgrc=${Date.now()}`;
+      const dropOld = () => link.remove();
+      clone.addEventListener('load', dropOld, { once: true });
+      clone.addEventListener('error', dropOld, { once: true });
+      link.after(clone);
+    });
+  };
+  // Manual re-fire hook (debug / if you tweak panels live).
+  (window as Window & { __reviveGlass?: () => void }).__reviveGlass = reviveGlass;
+
+  // Attach, wait for the feImage displacement maps to actually decode, then revive.
+  requestAnimationFrame(() => {
+    const lg = window.LiquidGlass;
+    if (!lg) return;
+    lg.init?.();
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-lg]'));
+    panels.forEach((el) => lg.attach?.(el));
+    if (!panels.length || lg.supported === false) return; // frosted fallback → no SVG filter
+    // The filter's feImage decode + first backdrop composite settle asynchronously, and the
+    // exact moment varies by machine — too early and the recalc misses (decoding a *copy* of
+    // the data-URI resolves long before the filter's own copy is ready). So fire reviveGlass
+    // a few times across the first few seconds to reliably catch the post-settle window.
+    // (Each extra pass is a ~1-frame no-op once refraction is already up.)
+    [400, 900, 1800, 3500].forEach((ms) => window.setTimeout(reviveGlass, ms));
+  });
 
   return {
     setKpi({ inPort, occupied, total }) {
