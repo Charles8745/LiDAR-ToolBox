@@ -2,6 +2,8 @@ uniform sampler2D uRamp;
 uniform float uFade;          // 0 = accumulate, 1 = fade
 uniform float uFadeDuration;  // seconds
 uniform float uColorMode;     // 0 = color by distance, 1 = color by value
+uniform float uTime;          // seconds (drives the optional pulse)
+uniform float uPulseHz;       // 0 = no pulse; >0 = brightness blinks at this frequency
 
 varying float vDist01;
 varying float vValue01;
@@ -21,6 +23,10 @@ void main() {
   if (uFade > 0.5) {
     alpha *= clamp(1.0 - vAge / max(uFadeDuration, 0.001), 0.0, 1.0);
     if (alpha < 0.01) discard;
+  }
+  if (uPulseHz > 0.0) {
+    // brightness blink in [0.3, 1.0]; also makes the bloom pulse for these points
+    col *= 0.3 + 0.7 * (0.5 + 0.5 * sin(uTime * uPulseHz * 6.28318530718));
   }
   gl_FragColor = vec4(col, alpha);
   #include <fog_fragment>

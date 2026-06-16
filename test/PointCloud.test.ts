@@ -156,3 +156,14 @@ describe('PointCloud fog flag', () => {
     expect(mat.uniforms.fogFar).toBeDefined();
   });
 });
+
+describe('PointCloud pulse', () => {
+  it('drives uPulseHz from the pulseHz option (default 0) and setPulseHz()', () => {
+    const steady = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate' });
+    expect((steady.points.material as THREE.ShaderMaterial).uniforms.uPulseHz.value).toBe(0);
+    const blink = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate', pulseHz: 1.5 });
+    expect((blink.points.material as THREE.ShaderMaterial).uniforms.uPulseHz.value).toBe(1.5);
+    blink.setPulseHz(3);
+    expect((blink.points.material as THREE.ShaderMaterial).uniforms.uPulseHz.value).toBe(3);
+  });
+});

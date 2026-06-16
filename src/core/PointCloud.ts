@@ -14,6 +14,8 @@ export interface PointCloudOptions {
   colorMode?: 'distance' | 'value';
   maxPointSize?: number;
   sizeAttenuation?: boolean;
+  /** Brightness blink frequency in Hz (0 = steady, the default). Pulses color, so bloom pulses too. */
+  pulseHz?: number;
 }
 
 /** GPU point store: a single THREE.Points backed by a FIFO ring buffer of preallocated attributes. */
@@ -69,6 +71,7 @@ export class PointCloud {
         uColorMode: { value: opts.colorMode === 'value' ? 1 : 0 },
         uMaxPointSize: { value: Math.max(opts.maxPointSize ?? 5, opts.pointSize ?? 2, 1) },
         uSizeAttenuation: { value: opts.sizeAttenuation === false ? 0 : 1 },
+        uPulseHz: { value: opts.pulseHz ?? 0 },
       },
       vertexShader,
       fragmentShader,
@@ -159,6 +162,11 @@ export class PointCloud {
 
   setPersistence(persistence: Persistence): void {
     this.material.uniforms.uFade.value = persistence === 'fade' ? 1 : 0;
+  }
+
+  /** Set the brightness blink frequency in Hz (0 = steady). */
+  setPulseHz(hz: number): void {
+    this.material.uniforms.uPulseHz.value = hz;
   }
 
   clear(): void {
