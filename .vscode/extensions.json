@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "ms-edgedevtools.vscode-edge-devtools",
+    "vitest.explorer",
+    "naumovs.color-highlight",
+    "slevesque.shader",
+    "usernamehw.errorlens",
+    "eamodio.gitlens",
+    "esbenp.prettier-vscode"
+  ]
+}

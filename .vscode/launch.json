@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "戰情室:Vite + Chrome(預設)",
+      "url": "http://localhost:5173/examples/kaohsiung-port/index.html",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "preLaunchTask": "vite: dev"
+    },
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "戰情室:Vite + Edge(可用 Edge DevTools 回寫 CSS)",
+      "url": "http://localhost:5173/examples/kaohsiung-port/index.html",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "preLaunchTask": "vite: dev"
+    }
+  ]
+}
