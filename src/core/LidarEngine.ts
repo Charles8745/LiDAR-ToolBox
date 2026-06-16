@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RaycastSampler } from './RaycastSampler';
 import { PointCloud } from './PointCloud';
-import { createSelectiveBloom, BLOOM_LAYER, type SelectiveBloom, type BloomOptions } from './postfx';
+import { createSelectiveBloom, BLOOM_LAYER, type SelectiveBloom, type BloomOptions, type BloomGroup } from './postfx';
 import { buildRampTextureFromFn } from '../ramps/lut';
 import type { Emitter, Scannable, ColorRamp, Persistence, EmitContext } from './types';
 
@@ -25,7 +25,8 @@ export interface LidarEngineOptions {
   cameraFar?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
-  bloom?: BloomOptions | boolean;
+  /** Single group on BLOOM_LAYER, or an array of independently-tuned groups (each with its own `layer`). */
+  bloom?: BloomOptions | BloomGroup[] | boolean;
 }
 
 function resolveRamp(ramp: ColorRamp | undefined): THREE.Texture {
@@ -217,10 +218,14 @@ export class LidarEngine {
     this.pointCloud.setPersistence(persistence);
   }
 
-  /** Attach an app-owned object to the scene. `opts.bloom` makes it glow under selective bloom. */
-  addLayer(obj: THREE.Object3D, opts?: { bloom?: boolean }): void {
+  /**
+   * Attach an app-owned object to the scene. `opts.bloom` makes it glow:
+   * `true` → default BLOOM_LAYER; a number → that bloom group's layer (for multi-group bloom).
+   */
+  addLayer(obj: THREE.Object3D, opts?: { bloom?: boolean | number }): void {
     this.extraLayers.push(obj);
-    if (opts?.bloom) obj.layers.enable(BLOOM_LAYER);
+    if (opts?.bloom === true) obj.layers.enable(BLOOM_LAYER);
+    else if (typeof opts?.bloom === 'number') obj.layers.enable(opts.bloom);
     this.scene.add(obj);
   }
 
