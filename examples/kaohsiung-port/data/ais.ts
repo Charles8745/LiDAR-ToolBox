@@ -41,17 +41,21 @@ export function parseAisTime(raw: unknown): number | null {
   return Date.UTC(+y, +mo - 1, +d, +hh - TAIPEI_OFFSET_H, +mi, +(se ?? 0));
 }
 
-// Candidate property keys (confirmed/extended from Task 0 probe). Tolerant of name variants.
+// Property keys CONFIRMED from the live MPB probe (2026-06-18) — real keys first, other common
+// variants kept as tolerant fallbacks. NOTE: this feed provides COG but NO heading, and no
+// LOA/beam — so headingDeg stays -1 (orientation falls back to point-to-point bearing, spec §4.3)
+// and loaM/beamM stay undefined (renderer uses TYPE_DIMS_M by category). Record_Time is Taipei
+// local "YYYY/MM/DD HH:mm:ss" (handled by parseAisTime).
 const K = {
   mmsi: ['MMSI', 'mmsi', 'Mmsi'],
-  name: ['SHIPNAME', 'NAME', 'shipname', 'VESSEL_NAME', 'name'],
-  type: ['TYPE', 'SHIPTYPE', 'shiptype', 'type', 'ship_type'],
+  name: ['ShipName', 'SHIPNAME', 'NAME', 'shipname', 'VESSEL_NAME', 'name'],
+  type: ['Ship_and_Cargo_Type', 'TYPE', 'SHIPTYPE', 'shiptype', 'type', 'ship_type'],
   sog: ['SOG', 'sog', 'SPEED', 'speed'],
   cog: ['COG', 'cog', 'COURSE', 'course'],
-  hdg: ['HEADING', 'HDG', 'heading', 'hdg'],
-  imo: ['IMO', 'imo'],
-  call: ['CALLSIGN', 'CALL_SIGN', 'callsign'],
-  time: ['LASTTIME', 'RECORD_TIME', 'UTC', 'lasttime', 'TIME', 'time', 'TIMESTAMP'],
+  hdg: ['HEADING', 'HDG', 'heading', 'hdg'], // absent in MPB feed → headingDeg defaults to -1
+  imo: ['IMO_Number', 'IMO', 'imo'],
+  call: ['Call_Sign', 'CALLSIGN', 'CALL_SIGN', 'callsign'],
+  time: ['Record_Time', 'LASTTIME', 'RECORD_TIME', 'UTC', 'lasttime', 'TIME', 'time', 'TIMESTAMP'],
   loa: ['LENGTH', 'LOA', 'length'],
   beam: ['WIDTH', 'BEAM', 'width'],
 } as const;
