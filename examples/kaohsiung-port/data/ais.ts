@@ -178,3 +178,15 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
   if (code === 30 || (code >= 31 && code <= 32) || (code >= 50 && code <= 59)) return '工作';
   return '其他';
 }
+
+/** Pings → cleaned, aggregated tracks file with meta. */
+export function buildTracksFile(pings: AisPing[]): AisTracksFile {
+  const ships = cleanTracks(aggregateTracks(pings));
+  let fromMs = Infinity, toMs = -Infinity;
+  for (const s of ships) for (const p of s.path) {
+    if (p[2] < fromMs) fromMs = p[2];
+    if (p[2] > toMs) toMs = p[2];
+  }
+  if (!Number.isFinite(fromMs)) { fromMs = 0; toMs = 0; }
+  return { meta: { fromMs, toMs, count: ships.length, bbox: KHH_BBOX }, ships };
+}

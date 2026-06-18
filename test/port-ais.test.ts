@@ -145,3 +145,21 @@ describe('mapAisTypeToCategory', () => {
     expect(mapAisTypeToCategory(99)).toBe('其他');
   });
 });
+
+import { buildTracksFile } from '../examples/kaohsiung-port/data/ais';
+
+describe('buildTracksFile', () => {
+  it('aggregates+cleans pings into a tracks file with meta time range', () => {
+    const pings: AisPing[] = [
+      ping({ mmsi: '416000001', lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),
+      ping({ mmsi: '416000001', lat: 22.601, lon: 120.301, recordedAtMs: 61_000 }),
+      ping({ mmsi: '416000002', lat: 22.55, lon: 120.33, recordedAtMs: 30_000 }),
+    ];
+    const file = buildTracksFile(pings);
+    expect(file.ships).toHaveLength(2);
+    expect(file.meta.count).toBe(2);
+    expect(file.meta.fromMs).toBe(1000);
+    expect(file.meta.toMs).toBe(61_000);
+    expect(file.meta.bbox).toBeDefined();
+  });
+});
