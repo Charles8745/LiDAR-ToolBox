@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lerpAngleDeg, positionAt } from '../examples/kaohsiung-port/time/ais-replay';
+import { lerpAngleDeg, positionAt, trailPointsAt } from '../examples/kaohsiung-port/time/ais-replay';
 import type { AisTrack } from '../examples/kaohsiung-port/data/ais';
 
 const track = (path: [number, number, number, number][]): AisTrack =>
@@ -36,5 +36,22 @@ describe('positionAt', () => {
     const t3 = track([[22.6, 120.3, 1000, 45]]);
     expect(positionAt(t3, 1000)!.lat).toBeCloseTo(22.6);
     expect(positionAt(t3, 1001)).toBeNull();
+  });
+});
+
+describe('trailPointsAt', () => {
+  const t = track([
+    [22.60, 120.30, 0, 90], [22.61, 120.31, 60_000, 90],
+    [22.62, 120.32, 120_000, 90], [22.63, 120.33, 180_000, 90],
+  ]);
+  it('returns real path points within the trailing window, with age01', () => {
+    const trail = trailPointsAt(t, 180_000, 120_000); // 最近 2 分鐘
+    expect(trail.length).toBe(3); // t=60k,120k,180k
+    // 最舊點 age01≈1,最新點 age01≈0
+    expect(trail[0][2]).toBeCloseTo(1, 1);
+    expect(trail[trail.length - 1][2]).toBeCloseTo(0, 1);
+  });
+  it('is empty for a stationary single-sample-in-window vessel beyond window', () => {
+    expect(trailPointsAt(t, 0, 120_000).length).toBeLessThanOrEqual(1);
   });
 });

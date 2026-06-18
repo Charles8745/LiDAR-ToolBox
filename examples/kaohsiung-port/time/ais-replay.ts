@@ -38,3 +38,14 @@ export function positionAt(track: AisTrack, tMs: number): ResolvedPos | null {
   else headingDeg = bearingDeg(a[0], a[1], b[0], b[1]);
   return { lat, lon, headingDeg };
 }
+
+/** Real path points in (tMs-windowMs, tMs], each as [lat, lon, age01] (0=newest,1=oldest). */
+export function trailPointsAt(track: AisTrack, tMs: number, windowMs: number): Array<[number, number, number]> {
+  const out: Array<[number, number, number]> = [];
+  for (const p of track.path) {
+    if (p[2] > tMs || p[2] < tMs - windowMs) continue;
+    const age01 = windowMs > 0 ? (tMs - p[2]) / windowMs : 0;
+    out.push([p[0], p[1], age01]);
+  }
+  return out;
+}
