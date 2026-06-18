@@ -40,7 +40,7 @@ export function sampleShipFootprint(center: World, lengthU: number, widthU: numb
 }
 
 // Keyed by ShipCategory so a category reorder/addition is caught at compile time.
-const TYPE_DIMS_M = {
+export const TYPE_DIMS_M = {
   '貨櫃': { loa: 300, beam: 45 },
   '油品': { loa: 250, beam: 44 },
   '散雜': { loa: 180, beam: 30 },
