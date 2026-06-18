@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lerpAngleDeg, positionAt, trailPointsAt } from '../examples/kaohsiung-port/time/ais-replay';
+import { lerpAngleDeg, positionAt, trailPointsAt, vesselsInPortAt, incomingAt } from '../examples/kaohsiung-port/time/ais-replay';
 import type { AisTrack } from '../examples/kaohsiung-port/data/ais';
 
 const track = (path: [number, number, number, number][]): AisTrack =>
@@ -53,5 +53,22 @@ describe('trailPointsAt', () => {
   });
   it('is empty for a stationary single-sample-in-window vessel beyond window', () => {
     expect(trailPointsAt(t, 0, 120_000).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('vesselsInPortAt / incomingAt', () => {
+  // A:已在港(bbox 內);B:t=0 在 bbox 外,t=120s 進入 bbox
+  const inside = track([[22.60, 120.30, 0, 0], [22.60, 120.30, 200_000, 0]]); inside.mmsi = 'A';
+  const arriving = track([[22.60, 120.10, 0, 90], [22.60, 120.30, 120_000, 90]]); arriving.mmsi = 'B';
+  const tracks = [inside, arriving];
+
+  it('counts vessels inside the bbox at time t', () => {
+    expect(vesselsInPortAt(tracks, 0)).toBe(1);        // 只有 A
+    expect(vesselsInPortAt(tracks, 120_000)).toBe(2);  // A + B 已進入
+  });
+  it('incomingAt finds vessels entering the bbox within the window', () => {
+    const inc = incomingAt(tracks, 0, 130_000);
+    expect(inc.map((t) => t.mmsi)).toContain('B');
+    expect(inc.map((t) => t.mmsi)).not.toContain('A'); // A 已在港,不算 incoming
   });
 });
