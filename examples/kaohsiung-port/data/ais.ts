@@ -90,3 +90,12 @@ export function parseAisFeature(feature: unknown): AisPing | null {
     recordedAtMs: parseAisTime(pick(props, K.time)) ?? 0,
   };
 }
+
+export const KHH_BBOX: BBox = { s: 22.50, n: 22.66, w: 120.24, e: 120.40 };
+
+export function inBBox(lat: number, lon: number, b: BBox): boolean {
+  return lat >= b.s && lat <= b.n && lon >= b.w && lon <= b.e;
+}
+export function inKaohsiungBBox(lat: number, lon: number): boolean {
+  return inBBox(lat, lon, KHH_BBOX);
+}

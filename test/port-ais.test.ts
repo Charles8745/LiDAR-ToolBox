@@ -48,3 +48,18 @@ describe('parseAisFeature', () => {
     expect(parseAisFeature({ type: 'Feature', geometry: null, properties: { MMSI: '1' } } as any)).toBeNull();
   });
 });
+
+import { inKaohsiungBBox, KHH_BBOX } from '../examples/kaohsiung-port/data/ais';
+
+describe('KHH bbox', () => {
+  it('accepts a point inside the port', () => {
+    expect(inKaohsiungBBox(22.60, 120.30)).toBe(true);
+  });
+  it('rejects points outside', () => {
+    expect(inKaohsiungBBox(25.04, 121.51)).toBe(false); // 台北
+    expect(inKaohsiungBBox(22.60, 120.10)).toBe(false); // 偏西
+  });
+  it('KHH_BBOX matches spec defaults', () => {
+    expect(KHH_BBOX).toEqual({ s: 22.50, n: 22.66, w: 120.24, e: 120.40 });
+  });
+});
