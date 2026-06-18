@@ -34,7 +34,14 @@ fit();
 const proj = createProjection(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon, WORLD_SCALE);
 const fromMs = tracksFile.meta.fromMs;
 const toMs = tracksFile.meta.toMs;
-const nowMs = fromMs; // 回放從頭開始
+// 開場定在「在港船數最多」的時刻:錄製窗頭尾因 AIS 更新節奏較稀疏(各船軌跡起訖不齊),
+// 從 fromMs 開場只會看到 ~1 艘。掃描挑出最滿的時刻當預設視角(時間軸範圍仍為完整 from→to)。
+let nowMs = fromMs;
+for (let i = 0, best = -1; i <= 60; i++) {
+  const tt = fromMs + ((toMs - fromMs) * i) / 60;
+  const n = vesselsInPortAt(tracks, tt);
+  if (n > best) { best = n; nowMs = tt; }
+}
 const TRAIL_MS = 15 * 60_000; // 拖尾窗 15 分鐘
 const INCOMING_WINDOW = 30 * 60_000; // 進港前瞻 30 分鐘
 
