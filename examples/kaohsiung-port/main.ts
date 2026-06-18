@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
-import { buildBaseLayer, buildShipLayer, sampleShipFootprint, type ShipLayerResult } from './scene/portPoints';
+import { buildShipLayer, sampleShipFootprint, type ShipLayerResult } from './scene/portPoints';
+import { buildLayers, type LayerConfig } from './scene/layers';
 import { buildIntervals, occupancyAt, berthStatusAt, buildOccupancyTrend, buildIncomingList } from './time/occupancy';
 import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from './palette';
 import { MIN_BERTH, MAX_BERTH, berthPositionLatLon } from './berths';
@@ -34,13 +35,16 @@ const INCOMING_WINDOW = 2 * HOUR;
 const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(目前琥珀)
 const INCOMING_PULSE_HZ = 0.8; // 每秒閃幾次(0 = 不閃)
 
-// Static base layer (coastline + piers), constant-size points.
-const base = buildBaseLayer(osm.coastline, osm.piers, proj);
-const basePC = new PointCloud({
-  capacity: base.values.length + 16, ramp: buildCategoryLUT(BASE_COLORS),
-  persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 2, maxPointSize: 3,
-});
-basePC.addPoints(base.positions, base.values);
+// Static layers (one independent PointCloud per category) — config-driven; tune via __twin.layers.
+const LAYERS: LayerConfig[] = [
+  { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: BASE_COLORS[0], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
+  { key: 'pier',       label: '碼頭',   source: 'piers',      kind: 'line',     color: BASE_COLORS[1], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
+  { key: 'breakwater', label: '防波堤', source: 'breakwater', kind: 'line',     color: [90, 130, 150], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
+  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [255, 150, 60], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    height: 0.3, rings: 6, perRing: 32 },
+  { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'gantry',   color: [120, 180, 255], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.05 },
+  { key: 'anchorage',  label: '錨地',   source: 'anchorages', kind: 'zone',     color: [200, 160, 255], pointSize: 3, maxPointSize: 5, bloomGroup: 4, baseY: 0.05, radius: 1.0, ringCount: 48, spacing: 0.5 },
+];
+const layerHandles = buildLayers(LAYERS, osm, proj);
 
 // Dynamic ship layer (rebuilt on filter/scrub), constant-size points, fine footprint spacing.
 const shipTypeLUT = buildCategoryLUT(SHIP_CATEGORY_COLORS);
@@ -104,13 +108,14 @@ const engine = new LidarEngine({
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
   bloom: [
-    { layer: 1, strength: 0.3, radius: 0.1, threshold: 0.1 },  // 群組1=船:收斂光暈
-    { layer: 2, strength: 1.1, radius: 0.5, threshold: 0.0 },  // 群組2=進港標記:更亮、更外擴
-    { layer: 3, strength: 0.05, radius: 0.1, threshold: 0.0}
+    { layer: 1, strength: 0.3,  radius: 0.1, threshold: 0.1 },  // 群組1=船
+    { layer: 2, strength: 1.1,  radius: 0.5, threshold: 0.0 },  // 群組2=進港
+    { layer: 3, strength: 0.05, radius: 0.1, threshold: 0.0 },  // 群組3=結構(海岸線/碼頭/防波堤)
+    { layer: 4, strength: 0.6,  radius: 0.3, threshold: 0.0 },  // 群組4=地標(儲槽/起重機/錨地)
   ],
   fog: { color: 0x0b0c0e, near: dist * 0.1, far: dist * 5.0 },
 });
-engine.addLayer(basePC.points, { bloom: 3});   // 輪廓點
+for (const h of layerHandles) engine.addLayer(h.pc.points, { bloom: h.config.bloomGroup });
 engine.addLayer(shipPC.points, { bloom: 1 });  // 船 → bloom 群組 1
 engine.addLayer(incPC.points, { bloom: 2 });   // 進港標記 → bloom 群組 2
 
@@ -181,7 +186,8 @@ canvas.addEventListener('click', (e) => {
 
 // Dev/verification handles.
 (window as any).__twin = {
-  engine, basePC, shipPC, incPC, mapPlane, rebuildShips, rebuildIncoming, refresh, nowMs, intervals,
+  engine, shipPC, incPC, mapPlane, rebuildShips, rebuildIncoming, refresh, nowMs, intervals,
+  layers: Object.fromEntries(layerHandles.map((h) => [h.key, h])),
   get shipCenters() { return shipCenters; },
   setBasemapTint: (hex: number) => { (mapPlane.material as THREE.MeshBasicMaterial).color.setHex(hex); },
 };

@@ -1,13 +1,11 @@
 import type { World, Projection } from '../geo/projection';
-import type { LatLon, Polyline } from '../data/osm';
 import type { VesselRecord } from '../data/twport';
 import { resolveBerthLatLon } from '../berths';
-import { SHIP_CATEGORY_COLORS, BASE_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from '../palette';
+import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from '../palette';
 import type { ShipCategory } from '../palette';
 
 export interface PointBatch { positions: Float32Array; values: Float32Array; }
 
-const Y_WATER = 0;
 const Y_SHIP = 0.5;
 
 export function samplePolyline(pts: World[], spacing: number): World[] {
@@ -39,19 +37,6 @@ export function sampleShipFootprint(center: World, lengthU: number, widthU: numb
     }
   }
   return out;
-}
-
-const llToWorld = (proj: Projection, ll: LatLon): World => proj.toWorld(ll.lat, ll.lon);
-
-export function buildBaseLayer(coastline: Polyline[], piers: Polyline[], proj: Projection, spacing = 0.8): PointBatch {
-  const pos: number[] = []; const val: number[] = [];
-  const push = (w: World[], catIdx: number) => {
-    const v = valueFor(catIdx, BASE_COLORS.length);
-    for (const p of w) { pos.push(p.x, Y_WATER, p.z); val.push(v); }
-  };
-  for (const line of coastline) push(samplePolyline(line.map((l) => llToWorld(proj, l)), spacing), 0);
-  for (const line of piers) push(samplePolyline(line.map((l) => llToWorld(proj, l)), spacing), 1);
-  return { positions: new Float32Array(pos), values: new Float32Array(val) };
 }
 
 // Keyed by ShipCategory so a category reorder/addition is caught at compile time.
