@@ -119,7 +119,7 @@ export function aggregateTracks(pings: AisPing[]): AisTrack[] {
       seen.add(p.recordedAtMs);
       path.push([p.lat, p.lon, p.recordedAtMs, p.headingDeg]);
     }
-    // identity/dims: 取最後一筆有值者
+    // identity/dims: 取最後一筆有值者 (依賴上方時間排序 / relies on the time-sort above)
     const id = { name: '', imo: '', callSign: '', aisType: 0, loaM: undefined as number | undefined, beamM: undefined as number | undefined };
     for (const p of arr) {
       if (p.name) id.name = p.name;
@@ -146,21 +146,34 @@ function metresBetween(aLat: number, aLon: number, bLat: number, bLon: number): 
   return Math.hypot(dx, dy);
 }
 
+/** Implied speed (knots) between two path points; 0 if dt ≤ 0 (can't gate). */
+function impliedKnots(a: AisPathPoint, b: AisPathPoint): number {
+  const dtSec = (b[2] - a[2]) / 1000;
+  if (dtSec <= 0) return 0;
+  return (metresBetween(a[0], a[1], b[0], b[1]) / dtSec) * 1.94384;
+}
+
 /** Remove invalid MMSIs and GPS-spike points (>40 kn implied); keep stationary vessels. */
 export function cleanTracks(tracks: AisTrack[]): AisTrack[] {
   const out: AisTrack[] = [];
   for (const t of tracks) {
     if (INVALID_MMSI.has(t.mmsi) || !/^\d{6,9}$/.test(t.mmsi)) continue;
+    const src = t.path;
     const path: AisPathPoint[] = [];
-    for (const pt of t.path) {
-      const prev = path[path.length - 1];
-      if (prev) {
-        const dtSec = (pt[2] - prev[2]) / 1000;
-        if (dtSec > 0) {
-          const knots = (metresBetween(prev[0], prev[1], pt[0], pt[1]) / dtSec) * 1.94384;
-          if (knots > MAX_KN) continue; // 跳點:丟此點,保留 prev
-        }
+    // Leading-spike disambiguation: the forward gate below drops the *current* point,
+    // so a spiky path[0] would survive and (wrongly) drop the legitimate path[1].
+    // If path[0]→path[1] is implausible but path[1]→path[2] is plausible, path[0] is the
+    // outlier ⇒ drop it and seed the reference at path[1].
+    let startIdx = 0;
+    if (src.length >= 2 && impliedKnots(src[0], src[1]) > MAX_KN) {
+      if (src.length >= 3 && impliedKnots(src[1], src[2]) <= MAX_KN) {
+        startIdx = 1; // path[0] is the outlier → skip it
       }
+    }
+    for (let i = startIdx; i < src.length; i++) {
+      const pt = src[i];
+      const prev = path[path.length - 1];
+      if (prev && impliedKnots(prev, pt) > MAX_KN) continue; // 跳點:丟此點,保留 prev
       path.push(pt);
     }
     if (path.length > 0) out.push({ ...t, path });
@@ -175,7 +188,7 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
   if (code >= 70 && code <= 79) return '散雜';
   if (code >= 60 && code <= 69) return '客運';
   if (code === 35) return '軍艦';
-  if (code === 30 || (code >= 31 && code <= 32) || (code >= 50 && code <= 59)) return '工作';
+  if ((code >= 30 && code <= 32) || (code >= 50 && code <= 59)) return '工作';
   return '其他';
 }
 

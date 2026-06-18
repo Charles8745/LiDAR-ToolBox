@@ -14,8 +14,14 @@ if (!file) throw new Error(`no raw-khh-*.jsonl in ${dir} — run \`npm run port:
 const pings: AisPing[] = [];
 for (const line of readFileSync(resolve(dir, file), 'utf8').split('\n')) {
   if (!line.trim()) continue;
-  const rec = JSON.parse(line) as { pings: AisPing[] };
-  if (Array.isArray(rec.pings)) pings.push(...rec.pings);
+  // The recorder is append-only; an interrupted write can leave a truncated final
+  // line. Skip unparseable lines instead of aborting the whole export.
+  try {
+    const rec = JSON.parse(line) as { pings: AisPing[] };
+    if (Array.isArray(rec.pings)) pings.push(...rec.pings);
+  } catch {
+    console.warn(`skipping malformed JSONL line in ${file}`);
+  }
 }
 
 const out = buildTracksFile(pings);

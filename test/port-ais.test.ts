@@ -59,6 +59,9 @@ describe('KHH bbox', () => {
     expect(inKaohsiungBBox(25.04, 121.51)).toBe(false); // 台北
     expect(inKaohsiungBBox(22.60, 120.10)).toBe(false); // 偏西
   });
+  it('treats on-edge points as inside (inclusive boundaries)', () => {
+    expect(inKaohsiungBBox(22.50, 120.24)).toBe(true); // SW corner
+  });
   it('KHH_BBOX matches spec defaults', () => {
     expect(KHH_BBOX).toEqual({ s: 22.50, n: 22.66, w: 120.24, e: 120.40 });
   });
@@ -90,6 +93,7 @@ describe('aggregateTracks', () => {
       ping({ mmsi: 'A', lat: 22.61, lon: 120.31, recordedAtMs: 1000 }),
     ]);
     expect(tracks[0].path).toHaveLength(1);
+    expect(tracks[0].path[0]).toEqual([22.60, 120.30, 1000, -1]);
   });
   it('carries latest non-empty identity/dims onto the track', () => {
     const [t] = aggregateTracks([
@@ -121,6 +125,15 @@ describe('cleanTracks', () => {
     const cleaned = cleanTracks([t]);
     expect(cleaned[0].path).toHaveLength(2);
     expect(cleaned[0].path.some((p) => p[0] === 23.10)).toBe(false);
+  });
+  it('drops a leading GPS spike (first point), keeping the good tail', () => {
+    // path[0]→path[1] is absurd, but path[1]→path[2] is plausible ⇒ path[0] is the outlier
+    const t = trk('416000123', [[25.0, 120.30, 0, 0], [22.60, 120.30, 60_000, 0], [22.601, 120.301, 120_000, 0]]);
+    const cleaned = cleanTracks([t]);
+    expect(cleaned[0].path).toHaveLength(2);
+    expect(cleaned[0].path.some((p) => p[0] === 25.0)).toBe(false);
+    expect(cleaned[0].path[0]).toEqual([22.60, 120.30, 60_000, 0]);
+    expect(cleaned[0].path[1]).toEqual([22.601, 120.301, 120_000, 0]);
   });
   it('drops invalid/test MMSIs', () => {
     expect(cleanTracks([trk('111111111', [[22.6, 120.3, 0, 0]])])).toHaveLength(0);
