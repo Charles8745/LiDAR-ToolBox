@@ -10,6 +10,14 @@ describe('footprintCentroidRadius', () => {
     expect(center.z).toBeCloseTo(0);
     expect(radius).toBeCloseTo(Math.SQRT2); // each corner dist = sqrt(2)
   });
+  it('ignores a closed ring’s duplicated closing vertex (no double-count)', () => {
+    const corners = [{ x: -1, z: -1 }, { x: 1, z: -1 }, { x: 1, z: 1 }, { x: -1, z: 1 }];
+    const open = footprintCentroidRadius(corners);
+    const closed = footprintCentroidRadius([...corners, { x: -1, z: -1 }]); // first === last
+    expect(closed.center.x).toBeCloseTo(open.center.x);
+    expect(closed.center.z).toBeCloseTo(open.center.z);
+    expect(closed.radius).toBeCloseTo(open.radius);
+  });
 });
 
 describe('sampleCylinderShell', () => {

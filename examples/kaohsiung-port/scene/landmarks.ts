@@ -2,13 +2,18 @@ import type { World } from '../geo/projection';
 
 /** Centroid + mean radius of a footprint polygon (world coords). */
 export function footprintCentroidRadius(poly: World[]): { center: World; radius: number } {
-  const n = poly.length;
+  // Drop a closed ring's duplicated closing vertex so it is not double-counted.
+  const last = poly.length - 1;
+  const pts = poly.length > 1 && poly[0].x === poly[last].x && poly[0].z === poly[last].z
+    ? poly.slice(0, last)
+    : poly;
+  const n = pts.length;
   if (n === 0) return { center: { x: 0, z: 0 }, radius: 0 };
   let sx = 0, sz = 0;
-  for (const p of poly) { sx += p.x; sz += p.z; }
+  for (const p of pts) { sx += p.x; sz += p.z; }
   const center = { x: sx / n, z: sz / n };
   let sr = 0;
-  for (const p of poly) sr += Math.hypot(p.x - center.x, p.z - center.z);
+  for (const p of pts) sr += Math.hypot(p.x - center.x, p.z - center.z);
   return { center, radius: sr / n };
 }
 
