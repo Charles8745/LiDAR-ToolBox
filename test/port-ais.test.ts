@@ -102,3 +102,31 @@ describe('aggregateTracks', () => {
     expect(t.loaM).toBe(300);
   });
 });
+
+import { cleanTracks } from '../examples/kaohsiung-port/data/ais';
+import type { AisTrack } from '../examples/kaohsiung-port/data/ais';
+
+const trk = (mmsi: string, path: [number, number, number, number][]): AisTrack =>
+  ({ mmsi, imo: '', callSign: '', name: '', aisType: 0, path });
+
+describe('cleanTracks', () => {
+  it('keeps stationary vessels (sog≈0 berthed ships must survive)', () => {
+    const t = trk('416000123', [[22.60, 120.30, 1000, 10], [22.60, 120.30, 60_000, 10]]);
+    expect(cleanTracks([t])).toHaveLength(1);
+    expect(cleanTracks([t])[0].path).toHaveLength(2);
+  });
+  it('drops a GPS spike point (implied speed > 40 kn)', () => {
+    // 0.5° lat ≈ 55 km in 60 s ⇒ absurd speed ⇒ middle point dropped
+    const t = trk('416000123', [[22.60, 120.30, 0, 10], [23.10, 120.30, 60_000, 10], [22.60, 120.31, 120_000, 10]]);
+    const cleaned = cleanTracks([t]);
+    expect(cleaned[0].path).toHaveLength(2);
+    expect(cleaned[0].path.some((p) => p[0] === 23.10)).toBe(false);
+  });
+  it('drops invalid/test MMSIs', () => {
+    expect(cleanTracks([trk('111111111', [[22.6, 120.3, 0, 0]])])).toHaveLength(0);
+    expect(cleanTracks([trk('', [[22.6, 120.3, 0, 0]])])).toHaveLength(0);
+  });
+  it('drops tracks left with no points', () => {
+    expect(cleanTracks([trk('416000123', [])])).toHaveLength(0);
+  });
+});

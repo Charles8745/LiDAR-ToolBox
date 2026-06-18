@@ -131,3 +131,37 @@ export function aggregateTracks(pings: AisPing[]): AisTrack[] {
   }
   return out;
 }
+
+const INVALID_MMSI = new Set(['', '0', '111111111', '222222222', '999999999', '123456789']);
+const MAX_KN = 40;
+
+/** Haversine-ish metres between two lat/lon (small-distance approximation). */
+function metresBetween(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const mPerDegLat = 111_320;
+  const mPerDegLon = mPerDegLat * Math.cos((aLat * Math.PI) / 180);
+  const dx = (bLon - aLon) * mPerDegLon;
+  const dy = (bLat - aLat) * mPerDegLat;
+  return Math.hypot(dx, dy);
+}
+
+/** Remove invalid MMSIs and GPS-spike points (>40 kn implied); keep stationary vessels. */
+export function cleanTracks(tracks: AisTrack[]): AisTrack[] {
+  const out: AisTrack[] = [];
+  for (const t of tracks) {
+    if (INVALID_MMSI.has(t.mmsi) || !/^\d{6,9}$/.test(t.mmsi)) continue;
+    const path: AisPathPoint[] = [];
+    for (const pt of t.path) {
+      const prev = path[path.length - 1];
+      if (prev) {
+        const dtSec = (pt[2] - prev[2]) / 1000;
+        if (dtSec > 0) {
+          const knots = (metresBetween(prev[0], prev[1], pt[0], pt[1]) / dtSec) * 1.94384;
+          if (knots > MAX_KN) continue; // 跳點:丟此點,保留 prev
+        }
+      }
+      path.push(pt);
+    }
+    if (path.length > 0) out.push({ ...t, path });
+  }
+  return out;
+}
