@@ -62,3 +62,15 @@ export function sampleGantry(
   linePts({ x: center.x - hw, y: top, z: center.z }, { x: center.x + hw + boomLen, y: top, z: center.z }, spacing, out); // boom +x
   return out;
 }
+
+/** Flat ring outline of `count` points at `radius` around `center` at height `y`, plus a center point. */
+export function sampleZoneRing(center: World, radius: number, y: number, count: number): number[] {
+  const out: number[] = [];
+  const n = Math.max(3, count);
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2;
+    out.push(center.x + radius * Math.cos(a), y, center.z + radius * Math.sin(a));
+  }
+  out.push(center.x, y, center.z); // center dot
+  return out;
+}

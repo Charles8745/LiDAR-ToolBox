@@ -44,3 +44,20 @@ describe('sampleGantry', () => {
     expect(maxX).toBeCloseTo(0.2 + 0.5);    // hw(0.2) + boomLen(0.5)
   });
 });
+
+import { sampleZoneRing } from '../examples/kaohsiung-port/scene/landmarks';
+
+describe('sampleZoneRing', () => {
+  it('emits count ring points at radius plus a center point', () => {
+    const pts = sampleZoneRing({ x: 2, z: 2 }, 1.5, 0.05, 12);
+    expect(pts.length).toBe((12 + 1) * 3); // 12 ring + 1 center
+    // last triple is the center
+    const n = pts.length;
+    expect([pts[n - 3], pts[n - 2], pts[n - 1]]).toEqual([2, 0.05, 2]);
+    // every ring point sits at radius from center, at y
+    for (let i = 0; i < 12 * 3; i += 3) {
+      expect(pts[i + 1]).toBeCloseTo(0.05);
+      expect(Math.hypot(pts[i] - 2, pts[i + 2] - 2)).toBeCloseTo(1.5);
+    }
+  });
+});
