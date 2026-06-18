@@ -102,14 +102,14 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   const gauge = card('lg lg-gauge', leftRail);
   gauge.setAttribute('data-lg-profile', 'circle');
   gauge.setAttribute('data-lg-value', '0');
-  gauge.setAttribute('data-lg-unit', '%');
-  gauge.setAttribute('data-lg-label', '泊位佔用');
+  gauge.setAttribute('data-lg-unit', '艘');
+  gauge.setAttribute('data-lg-label', '範圍內船舶');
   gauge.style.width = '135px';
   gauge.style.alignSelf = 'center';
 
   // LEFT: in-port stat (+spark)
   const stat = card('lg lg-stat', leftRail);
-  stat.innerHTML = `<span class="lg-stat__label">在港船舶</span>
+  stat.innerHTML = `<span class="lg-stat__label">範圍內 AIS 船數</span>
     <div class="lg-stat__row"><span class="lg-stat__value" data-lg-value="0"></span></div>
     <svg class="lg-stat__spark" data-lg-spark="0,0"></svg>`;
   const statValue = stat.querySelector('.lg-stat__value') as HTMLElement;
@@ -147,13 +147,13 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
 
   // RIGHT: 24h trend chart
   const chart = card('lg lg-chart', rightRail);
-  chart.innerHTML = `<div class="lg-chart__head"><h4 class="lg-chart__title">24h 在港趨勢</h4></div>
+  chart.innerHTML = `<div class="lg-chart__head"><h4 class="lg-chart__title">在港船舶趨勢</h4></div>
     <svg class="lg-chart__svg" data-lg-chart="line" data-lg-points="0,0"></svg>`;
   const chartSvg = chart.querySelector('.lg-chart__svg') as SVGElement;
 
   // RIGHT: incoming list
   const incoming = card('lg lg-card', rightRail);
-  incoming.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港 · 2h</div><div data-rows></div>';
+  incoming.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港 · 30 分</div><div data-rows></div>';
   const incRows = incoming.querySelector('[data-rows]') as HTMLElement;
 
   // RIGHT: detail card (hidden until a ship is picked; stacks below the incoming list)
@@ -255,10 +255,9 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   });
 
   return {
-    setKpi({ inPort, occupied, total }) {
+    setKpi({ inPort }) {                               // 只取 inPort;occupied/total 已無意義
       statValue.setAttribute('data-lg-value', String(inPort));
-      const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
-      gauge.setAttribute('data-lg-value', String(pct));
+      gauge.setAttribute('data-lg-value', String(inPort)); // 環形以船數充填(cap≈80 滿格)
     },
     showVessel(v) {
       detail.style.display = 'block';
