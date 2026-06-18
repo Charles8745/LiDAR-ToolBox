@@ -50,16 +50,3 @@ export function vesselsInPortAt(tracks: AisTrack[], tMs: number): number {
   }
   return n;
 }
-
-/** Tracks that are outside the bbox at tMs but enter it within (tMs, tMs+windowMs]. */
-export function incomingAt(tracks: AisTrack[], tMs: number, windowMs: number): AisTrack[] {
-  const out: AisTrack[] = [];
-  for (const t of tracks) {
-    const now = positionAt(t, tMs);
-    if (now && inKaohsiungBBox(now.lat, now.lon)) continue; // 已在港
-    // 掃描窗內的真實 path 點,看是否進入 bbox
-    const entered = t.path.some((p) => p[2] > tMs && p[2] <= tMs + windowMs && inKaohsiungBBox(p[0], p[1]));
-    if (entered) out.push(t);
-  }
-  return out;
-}

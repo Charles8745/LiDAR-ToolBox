@@ -4,12 +4,13 @@ import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
 import { sampleShipFootprint, TYPE_DIMS_M } from './scene/portPoints';
 import { buildLayers, type LayerConfig } from './scene/layers';
-import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, statusIndex, valueFor } from './palette';
+import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, statusIndex, valueFor, type ShipCategory } from './palette';
 import { createOverlay } from './ui/overlay';
 import type { VesselRecord } from './data/twport';
 import type { AisTrack, AisTracksFile } from './data/ais';
-import { positionAt, vesselsInPortAt, incomingAt } from './time/ais-replay';
+import { positionAt, vesselsInPortAt } from './time/ais-replay';
 import { joinTwport, categoryForTrack } from './data/join';
+import { buildIntervals, buildIncomingList } from './time/occupancy';
 import type { OsmGeometry } from './data/osm';
 import osmData from './data/osm-khh.json';
 import basemapMeta from './data/basemap-khh.json';
@@ -17,7 +18,7 @@ import basemapUrl from './data/basemap-khh.jpg';
 
 interface Snapshot { capturedAtMs: number; berthing: VesselRecord[]; forecast: VesselRecord[]; }
 const snaps = import.meta.glob('./data/snapshots/*.json', { eager: true, import: 'default' });
-const snapshot = Object.values(snaps)[0] as Snapshot | undefined;
+const snapshot = Object.entries(snaps).sort(([a], [b]) => a.localeCompare(b)).pop()?.[1] as Snapshot | undefined;
 if (!snapshot) throw new Error('No snapshot found in ./data/snapshots/ — run `npm run port:fetch`');
 const osm = osmData as OsmGeometry;
 
@@ -36,21 +37,58 @@ const fromMs = tracksFile.meta.fromMs;
 const toMs = tracksFile.meta.toMs;
 // 開場定在「在港船數最多」的時刻:錄製窗頭尾因 AIS 更新節奏較稀疏(各船軌跡起訖不齊),
 // 從 fromMs 開場只會看到 ~1 艘。掃描挑出最滿的時刻當預設視角(時間軸範圍仍為完整 from→to)。
-let nowMs = fromMs;
-for (let i = 0, best = -1; i <= 60; i++) {
+let nowMs = fromMs, peakInPort = 0;
+for (let i = 0; i <= 60; i++) {
   const tt = fromMs + ((toMs - fromMs) * i) / 60;
   const n = vesselsInPortAt(tracks, tt);
-  if (n > best) { best = n; nowMs = tt; }
+  if (n > peakInPort) { peakInPort = n; nowMs = tt; }
 }
-const INCOMING_WINDOW = 30 * 60_000; // 進港前瞻 30 分鐘
+peakInPort = Math.max(peakInPort, 1);
 
-// 進港標記的顏色與閃爍頻率 —— 直接改這兩個值。
-const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(紅 — 警示,bloom 最強)
-const INCOMING_PULSE_HZ = 0.8; // 每秒閃幾次(0 = 不閃)
+// 進港預報 = TWPort forecast(真實 ETA / 船席 / 船名)。以快照自身 capturedAtMs 為基準,
+// 與 AIS 回放時鐘解耦(AIS 是過去的位置回放,TWPort 是官方未來進港預報)。
+const forecastIntervals = buildIntervals(snapshot.forecast);
+const incomingRefMs = snapshot.capturedAtMs;
+const INCOMING_WINDOW = 6 * 3600_000; // 預報前瞻 6 小時
+
+// 預建碼頭線段(世界座標),供靠泊船朝向對齊用(L2:此 feed 無 heading,靜止船朝向不可靠)。
+interface Seg { ax: number; az: number; bx: number; bz: number; }
+const pierSegs: Seg[] = [];
+for (const poly of osm.piers) {
+  const w = poly.map((ll) => proj.toWorld(ll.lat, ll.lon));
+  for (let i = 0; i < w.length - 1; i++) pierSegs.push({ ax: w[i].x, az: w[i].z, bx: w[i + 1].x, bz: w[i + 1].z });
+}
+/** 最近碼頭線段的方向 → footprint heading(讓船長軸沿碼頭)。 */
+function nearestPierHeadingRad(x: number, z: number): number {
+  let bestD = Infinity, h = 0;
+  for (const s of pierSegs) {
+    const dx = s.bx - s.ax, dz = s.bz - s.az;
+    const len2 = dx * dx + dz * dz || 1e-9;
+    const tt = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / len2));
+    const px = s.ax + dx * tt, pz = s.az + dz * tt;
+    const d = (x - px) ** 2 + (z - pz) ** 2;
+    if (d < bestD) { bestD = d; h = Math.atan2(dz, dx); }
+  }
+  return h;
+}
+
+// Per-track 預算快取(類別 / TWPort join / 是否靠泊 / 碼頭朝向)—— 這些都是靜態的,
+// 不該每幀重算(M1)。靠泊判定:整段軌跡淨位移 < 100m(1 世界單位)。
+interface TrackMeta { category: ShipCategory; vessel: VesselRecord | null; stationary: boolean; pierH: number; }
+const trackMeta = new Map<string, TrackMeta>();
+const STATIONARY_U = 1.0;
+for (const t of tracks) {
+  const category = categoryForTrack(t, allVessels);
+  const vessel = joinTwport(t, allVessels);
+  const p0 = t.path[0], pl = t.path[t.path.length - 1];
+  const a = proj.toWorld(p0[0], p0[1]), b = proj.toWorld(pl[0], pl[1]);
+  const stationary = Math.hypot(b.x - a.x, b.z - a.z) < STATIONARY_U;
+  trackMeta.set(t.mmsi, { category, vessel, stationary, pierH: stationary ? nearestPierHeadingRad(a.x, a.z) : 0 });
+}
 
 // Static layers (one independent PointCloud per category) — config-driven; tune via __twin.layers.
 // Visual hierarchy: infrastructure is desaturated cool-grey + dim so it recedes; saturated colour
-// is reserved for the live data (ships) and alerts (incoming). See palette note below.
+// is reserved for the live data (ships). See palette note below.
 const LAYERS: LayerConfig[] = [
   // Tier: structure (outline) — dim cool greys, barely-there glow (bloom group 3).
   { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: [72, 92, 108],   pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8, brightness: 0.9 },
@@ -64,18 +102,12 @@ const LAYERS: LayerConfig[] = [
 ];
 const layerHandles = buildLayers(LAYERS, osm, proj);
 
-// 動態 AIS 船層:真實位置 footprint + 點雲淡尾。
+// 動態 AIS 船層:真實 AIS 位置畫 footprint(無拖尾;朝向見 updateShips)。
 const shipTypeLUT = buildCategoryLUT(SHIP_CATEGORY_COLORS);
+const shipStatusLUT = buildCategoryLUT(STATUS_COLORS);
 const shipPC = new PointCloud({
   capacity: 300_000, ramp: shipTypeLUT,
   persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
-});
-
-// 進港標記層(沿用,改由 AIS incoming 餵)
-const incPC = new PointCloud({
-  capacity: 40_000, ramp: buildCategoryLUT([INCOMING_COLOR]),
-  persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
-  pulseHz: INCOMING_PULSE_HZ,
 });
 
 interface AisCenter { track: AisTrack; vessel: VesselRecord | null; x: number; y: number; z: number; }
@@ -89,21 +121,22 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
   for (const t of tracks) {
     const rp = positionAt(t, tMs);
     if (!rp) continue;
-    const cat = categoryForTrack(t, allVessels);
-    if (enabled && !enabled.has(cat)) continue;
-    const catIdx = SHIP_CATEGORIES.indexOf(cat);
+    const meta = trackMeta.get(t.mmsi)!;
+    if (enabled && !enabled.has(meta.category)) continue;
+    const catIdx = SHIP_CATEGORIES.indexOf(meta.category);
     const c = proj.toWorld(rp.lat, rp.lon);
-    const dim = TYPE_DIMS_M[cat];
+    const dim = TYPE_DIMS_M[meta.category];
     const loaU = (t.loaM ?? dim.loa) * WORLD_SCALE;
     const beamU = (t.beamM ?? dim.beam) * WORLD_SCALE;
-    // heading(0=N,順時針)→ footprint headingRad,讓船長軸對齊 (sinθ,-cosθ)
-    const theta = rp.headingDeg * Math.PI / 180;
-    const h = Math.atan2(-Math.cos(theta), Math.sin(theta));
+    // 朝向:靠泊船對齊最近碼頭線(L2);移動船用 AIS heading/COG 近似(此 feed 無 heading →
+    // positionAt 回傳點間方位角)。heading(0=N,順時針)→ footprint headingRad,長軸對齊 (sinθ,-cosθ)。
+    let h: number;
+    if (meta.stationary) h = meta.pierH;
+    else { const theta = rp.headingDeg * Math.PI / 180; h = Math.atan2(-Math.cos(theta), Math.sin(theta)); }
     const v01 = mode === 'type' ? valueFor(catIdx, SHIP_CATEGORY_COLORS.length) : statusVal;
-    // 小船降取樣:大船細、小船粗
-    const spacing = loaU > 1.5 ? 0.15 : 0.3;
+    const spacing = loaU > 1.5 ? 0.15 : 0.3; // 小船降取樣
     for (const p of sampleShipFootprint(c, loaU, beamU, h, spacing)) { pos.push(p.x, SHIP_Y, p.z); val.push(v01); }
-    centers.push({ track: t, vessel: joinTwport(t, allVessels), x: c.x, y: SHIP_Y, z: c.z });
+    centers.push({ track: t, vessel: meta.vessel, x: c.x, y: SHIP_Y, z: c.z });
   }
   shipCenters = centers;
   shipPC.setRamp(mode === 'type' ? shipTypeLUT : shipStatusLUT);
@@ -111,20 +144,6 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
   shipPC.addPoints(new Float32Array(pos), new Float32Array(val));
 }
 
-const INCOMING_VAL = valueFor(statusIndex('incoming'), STATUS_COLORS.length);
-function updateIncoming(tMs: number) {
-  const pos: number[] = []; const val: number[] = [];
-  for (const t of incomingAt(tracks, tMs, INCOMING_WINDOW)) {
-    const rp = positionAt(t, tMs);
-    if (!rp) continue;
-    const c = proj.toWorld(rp.lat, rp.lon);
-    for (const p of sampleShipFootprint(c, 0.3, 0.3, 0, 0.08)) { pos.push(p.x, 1.5, p.z); val.push(INCOMING_VAL); }
-  }
-  incPC.clear();
-  incPC.addPoints(new Float32Array(pos), new Float32Array(val));
-}
-
-const shipStatusLUT = buildCategoryLUT(STATUS_COLORS);
 updateShips(nowMs, 'type');
 
 // Auto-frame the camera on the active berth area (the vessels) for a centered oblique view.
@@ -147,10 +166,9 @@ const engine = new LidarEngine({
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
-  // Glow follows the visual hierarchy: incoming(alert) > ships(data) > landmarks > structure.
+  // Glow follows the visual hierarchy: ships(data) > landmarks > structure.
   bloom: [
     { layer: 1, strength: 0.5,  radius: 0.12, threshold: 0.05 }, // 群組1=船(資料,主角)
-    { layer: 2, strength: 1.1,  radius: 0.5,  threshold: 0.0 },  // 群組2=進港(警示,最亮)
     { layer: 3, strength: 0.05, radius: 0.1,  threshold: 0.0 },  // 群組3=結構(海岸線/碼頭/防波堤,幾乎不發光)
     { layer: 4, strength: 0.18, radius: 0.25, threshold: 0.0 },  // 群組4=地標(儲槽/起重機/錨地,微光退背景)
   ],
@@ -158,7 +176,6 @@ const engine = new LidarEngine({
 });
 for (const h of layerHandles) engine.addLayer(h.pc.points, { bloom: h.config.bloomGroup });
 engine.addLayer(shipPC.points, { bloom: 1 });  // 船 → bloom 群組 1
-engine.addLayer(incPC.points, { bloom: 2 });   // 進港標記 → bloom 群組 2
 
 // C backdrop: real NLSC aerial orthophoto (baked offline, see data/fetch-basemap.ts),
 // tinted at runtime via material color-multiply for the dark situation-room look.
@@ -197,19 +214,12 @@ const overlay = createOverlay(document.getElementById('overlay') as HTMLElement,
 function refresh(tMs: number) {
   currentMs = tMs;
   updateShips(tMs, colorBy, filter);
-  updateIncoming(tMs);
   const inPort = vesselsInPortAt(tracks, tMs);
-  overlay.setKpi({ inPort, occupied: inPort, total: 80, dateMs: tMs });
-  overlay.setIncoming(
-    incomingAt(tracks, tMs, INCOMING_WINDOW).slice(0, 6).map((t) => {
-      const v = joinTwport(t, allVessels);
-      return { berthNo: v?.berthNo ?? 0, name: v?.nameZh || v?.nameEn || t.name || t.mmsi, etaMs: tMs };
-    }),
-  );
+  overlay.setKpi({ inPort, occupied: inPort, total: peakInPort, dateMs: tMs });
   overlay.setClock(tMs);
 }
 
-// 趨勢:在港船數沿時間軸取樣 24 點
+// 趨勢:在港船數沿時間軸取樣 24 點(AIS)。
 function buildAisTrend(steps: number): number[] {
   const out: number[] = [];
   for (let i = 0; i <= steps; i++) out.push(vesselsInPortAt(tracks, fromMs + ((toMs - fromMs) * i) / steps));
@@ -217,6 +227,12 @@ function buildAisTrend(steps: number): number[] {
 }
 overlay.setTimeRange({ minMs: fromMs, maxMs: toMs, nowMs });
 overlay.setTrend(buildAisTrend(24));
+// 進港清單 = TWPort 官方預報(真實 ETA),於快照基準時刻計算一次,不隨 AIS scrubber 變動。
+overlay.setIncoming(
+  buildIncomingList(forecastIntervals, incomingRefMs, INCOMING_WINDOW).map((a) => ({
+    berthNo: a.berthNo, name: a.vessel.nameZh || a.vessel.nameEn || '—', etaMs: a.etaMs,
+  })),
+);
 refresh(nowMs);
 
 // 自走回放:每 ~80ms 推進(由 __twin.play()/pause() 控制;預設停)。
@@ -245,7 +261,7 @@ canvas.addEventListener('click', (e) => {
   if (best && best.d < 28) {
     const c = best.c;
     overlay.showVessel(c.vessel ?? {
-      visaNo: '', nameZh: c.track.name, nameEn: '', shipType: `AIS type ${c.track.aisType}`,
+      visaNo: '', nameZh: c.track.name, nameEn: '', shipType: trackMeta.get(c.track.mmsi)?.category ?? '—',
       wharfName: '—', berthNo: null, status: '', etaMs: null, etdMs: null, actPortMs: null,
       leaveMs: null, beforePort: '', nextPort: '', imo: c.track.imo, callSign: c.track.callSign,
       source: 'berthing',
@@ -255,8 +271,8 @@ canvas.addEventListener('click', (e) => {
 
 // Dev/verification handles.
 (window as any).__twin = {
-  engine, shipPC, incPC, mapPlane, updateShips, updateIncoming, refresh, play, pause,
-  fromMs, toMs, nowMs, tracks,
+  engine, shipPC, mapPlane, updateShips, refresh, play, pause,
+  fromMs, toMs, nowMs, peakInPort, tracks, trackMeta,
   layers: Object.fromEntries(layerHandles.map((h) => [h.key, h])),
   get shipCenters() { return shipCenters; },
   setBasemapTint: (hex: number) => { (mapPlane.material as THREE.MeshBasicMaterial).color.setHex(hex); },
