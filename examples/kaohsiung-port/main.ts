@@ -75,7 +75,7 @@ function rebuildIncoming(tMs: number) {
     if (berthStatusAt(intervals, b, tMs, INCOMING_WINDOW) !== 'incoming') continue;
     const ll = berthPositionLatLon(b);
     const c = proj.toWorld(ll.lat, ll.lon);
-    for (const p of sampleShipFootprint(c, 0.3, 0.3, 0, 0.08)) { pos.push(p.x, 0.8, p.z); val.push(INCOMING_VAL); }
+    for (const p of sampleShipFootprint(c, 0.3, 0.3, 0, 0.08)) { pos.push(p.x, 1.5, p.z); val.push(INCOMING_VAL); }
   }
   incPC.clear();
   incPC.addPoints(new Float32Array(pos), new Float32Array(val));
@@ -123,7 +123,7 @@ function buildBasemapPlane(): THREE.Mesh {
   const mat = new THREE.MeshBasicMaterial({ color: 0x2a2e33, transparent: true, opacity:1, depthWrite: false });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set((sw.x + ne.x) / 2, -0.5, (sw.z + ne.z) / 2);
+  mesh.position.set((sw.x + ne.x) / 2, 0, (sw.z + ne.z) / 2);
   mesh.visible = true; // default ON — the aerial base is the new centerpiece
   new THREE.TextureLoader().load(
     basemapUrl,

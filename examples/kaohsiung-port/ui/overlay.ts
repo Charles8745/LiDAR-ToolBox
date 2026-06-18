@@ -104,7 +104,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   gauge.setAttribute('data-lg-value', '0');
   gauge.setAttribute('data-lg-unit', '%');
   gauge.setAttribute('data-lg-label', '泊位佔用');
-  gauge.style.width = '140px';
+  gauge.style.width = '135px';
   gauge.style.alignSelf = 'center';
 
   // LEFT: in-port stat (+spark)

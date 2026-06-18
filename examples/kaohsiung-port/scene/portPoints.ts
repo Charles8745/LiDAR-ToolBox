@@ -8,7 +8,7 @@ import type { ShipCategory } from '../palette';
 export interface PointBatch { positions: Float32Array; values: Float32Array; }
 
 const Y_WATER = 0;
-const Y_SHIP = 1.5;
+const Y_SHIP = 0.5;
 
 export function samplePolyline(pts: World[], spacing: number): World[] {
   const out: World[] = [];
@@ -43,7 +43,7 @@ export function sampleShipFootprint(center: World, lengthU: number, widthU: numb
 
 const llToWorld = (proj: Projection, ll: LatLon): World => proj.toWorld(ll.lat, ll.lon);
 
-export function buildBaseLayer(coastline: Polyline[], piers: Polyline[], proj: Projection, spacing = 1.5): PointBatch {
+export function buildBaseLayer(coastline: Polyline[], piers: Polyline[], proj: Projection, spacing = 0.8): PointBatch {
   const pos: number[] = []; const val: number[] = [];
   const push = (w: World[], catIdx: number) => {
     const v = valueFor(catIdx, BASE_COLORS.length);

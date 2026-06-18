@@ -158,6 +158,7 @@ document.querySelectorAll('#overlay .lg-stat, #overlay .lg-card').forEach(e => e
 | 環形儀表大小(正圓) | `gauge` 建立後設 `width=height` + `alignSelf:center` | 寬≠高會變橢圓 |
 | 各卡片字級 | 各 `innerHTML` 的 `font-size` | 10 / 12px |
 | 3D 取景距離 / 角度 | `main.ts` `dist` 與 `cameraPosition` | `dist = radius*1.7 + 30` |
+| 點雲各層高度(y 堆疊) | `portPoints.ts` `Y_WATER`/`Y_SHIP`、`main.ts` 進港 `0.8`/底圖 `-0.5`(見 §4g) | 底圖 -0.5 / 海岸線 0 / 進港 0.8 / 船 1.5 |
 
 ### 4d. 多群組 bloom(各層獨立發光參數)
 
@@ -192,6 +193,26 @@ incPC.setPulseHz(2);  // 執行期改頻率;0 = 恆亮
 - 手動重觸發(改了面板、或想立即喚醒):Console 打 `__reviveGlass()`。
 - 完整原理與 `reviveGlass` 程式碼寫在工具包的 `~/Desktop/UI-ToolBox/CLAUDE.md`「已知陷阱」一節。
 - `prefers-reduced-motion` / 非 Chromium 走磨砂 fallback(`LiquidGlass.supported===false`),不受此問題影響、不需 revive。
+
+### 4g. 點雲高度分層(y 軸:各層上下堆疊)
+
+座標系:**北 = -z、東 = +x、上 = +y**。各層的「高度」就是它的 y 值。由下而上目前的堆疊:
+
+| 層 | 目前 y | 永久生效的位置 |
+|---|---|---|
+| 航照底圖平面 | `-0.5` | `main.ts` `buildBasemapPlane()` 的 `mesh.position.set(…, -0.5, …)` |
+| 底層點雲(海岸線 + 碼頭) | `0`(`Y_WATER`) | `scene/portPoints.ts` 頂部常數 `Y_WATER`(只被 `buildBaseLayer` 引用) |
+| 進港標記 | `0.8`(寫死) | `main.ts` `rebuildIncoming()` 的 `pos.push(p.x, 0.8, p.z)` |
+| 船舶點雲 | `1.5`(`Y_SHIP`) | `scene/portPoints.ts` 頂部常數 `Y_SHIP`(`buildShipLayer` 用,亦寫進 `centers.y`) |
+
+- **改底層 / 船層** 最乾淨的是改 `scene/portPoints.ts` 最上面那兩個常數(各只被引用一處):
+  ```ts
+  const Y_WATER = 0;    // 海岸線 + 碼頭的高度
+  const Y_SHIP  = 1.5;  // 船舶點雲的高度
+  ```
+- **單位換算**:`WORLD_SCALE = 0.01`(1 單位 = 100m),所以 `Y_SHIP = 1.5` ≈ 真實 150m 高。這裡純粹是視覺分層,別當公尺解讀。
+- **改 `Y_SHIP` 會連帶影響點擊挑選**:`buildShipLayer` 把同一個 `Y_SHIP` 寫進 `centers.y`,而 `main.ts` 點船是用 `centers` 投影到螢幕做最近距離比對——只要點雲與 `centers` 用同一常數(現況如此)就一致、不會點不到。
+- 想避免相鄰層 z-fighting / 互相遮擋,讓各層 y 值保持間隔即可(底圖最低、船最高)。Console 即時試:`__twin.shipPC.points.position.y = 3; `(整層平移,暫時性,⌘R 還原)。
 
 ## 5. `__twin` 除錯把手(Console)
 
