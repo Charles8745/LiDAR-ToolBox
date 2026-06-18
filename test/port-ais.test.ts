@@ -63,3 +63,42 @@ describe('KHH bbox', () => {
     expect(KHH_BBOX).toEqual({ s: 22.50, n: 22.66, w: 120.24, e: 120.40 });
   });
 });
+
+import { aggregateTracks } from '../examples/kaohsiung-port/data/ais';
+import type { AisPing } from '../examples/kaohsiung-port/data/ais';
+
+const ping = (p: Partial<AisPing>): AisPing => ({
+  mmsi: '1', lat: 22.6, lon: 120.3, sogKn: 0, cogDeg: -1, headingDeg: -1, aisType: 0,
+  name: '', imo: '', callSign: '', recordedAtMs: 0, ...p,
+});
+
+describe('aggregateTracks', () => {
+  it('groups pings by mmsi into time-sorted paths', () => {
+    const tracks = aggregateTracks([
+      ping({ mmsi: 'A', lat: 22.61, lon: 120.31, recordedAtMs: 2000, headingDeg: 90 }),
+      ping({ mmsi: 'A', lat: 22.60, lon: 120.30, recordedAtMs: 1000, headingDeg: 80 }),
+      ping({ mmsi: 'B', lat: 22.55, lon: 120.33, recordedAtMs: 1500 }),
+    ]);
+    expect(tracks).toHaveLength(2);
+    const a = tracks.find((t) => t.mmsi === 'A')!;
+    expect(a.path.map((p) => p[2])).toEqual([1000, 2000]); // 升序
+    expect(a.path[0]).toEqual([22.60, 120.30, 1000, 80]);
+  });
+  it('dedupes points sharing the same recordedAtMs (keeps first seen)', () => {
+    const tracks = aggregateTracks([
+      ping({ mmsi: 'A', lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),
+      ping({ mmsi: 'A', lat: 22.61, lon: 120.31, recordedAtMs: 1000 }),
+    ]);
+    expect(tracks[0].path).toHaveLength(1);
+  });
+  it('carries latest non-empty identity/dims onto the track', () => {
+    const [t] = aggregateTracks([
+      ping({ mmsi: 'A', recordedAtMs: 1000, name: '', imo: '' }),
+      ping({ mmsi: 'A', recordedAtMs: 2000, name: 'EVER', imo: '9811000', aisType: 70, loaM: 300, beamM: 45 }),
+    ]);
+    expect(t.name).toBe('EVER');
+    expect(t.imo).toBe('9811000');
+    expect(t.aisType).toBe(70);
+    expect(t.loaM).toBe(300);
+  });
+});

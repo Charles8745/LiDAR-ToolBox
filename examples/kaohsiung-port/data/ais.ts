@@ -99,3 +99,35 @@ export function inBBox(lat: number, lon: number, b: BBox): boolean {
 export function inKaohsiungBBox(lat: number, lon: number): boolean {
   return inBBox(lat, lon, KHH_BBOX);
 }
+
+/** Group pings by MMSI → AisTrack with time-sorted, same-time-deduped paths. */
+export function aggregateTracks(pings: AisPing[]): AisTrack[] {
+  const byMmsi = new Map<string, AisPing[]>();
+  for (const p of pings) {
+    const arr = byMmsi.get(p.mmsi);
+    if (arr) arr.push(p); else byMmsi.set(p.mmsi, [p]);
+  }
+  const out: AisTrack[] = [];
+  for (const [mmsi, arr] of byMmsi) {
+    arr.sort((a, b) => a.recordedAtMs - b.recordedAtMs);
+    const path: AisPathPoint[] = [];
+    const seen = new Set<number>();
+    for (const p of arr) {
+      if (seen.has(p.recordedAtMs)) continue;
+      seen.add(p.recordedAtMs);
+      path.push([p.lat, p.lon, p.recordedAtMs, p.headingDeg]);
+    }
+    // identity/dims: 取最後一筆有值者
+    const id = { name: '', imo: '', callSign: '', aisType: 0, loaM: undefined as number | undefined, beamM: undefined as number | undefined };
+    for (const p of arr) {
+      if (p.name) id.name = p.name;
+      if (p.imo) id.imo = p.imo;
+      if (p.callSign) id.callSign = p.callSign;
+      if (p.aisType) id.aisType = p.aisType;
+      if (p.loaM) id.loaM = p.loaM;
+      if (p.beamM) id.beamM = p.beamM;
+    }
+    out.push({ mmsi, ...id, path });
+  }
+  return out;
+}
