@@ -40,7 +40,7 @@ export function positionAt(track: AisTrack, tMs: number): ResolvedPos | null {
   return { lat, lon, headingDeg };
 }
 
-/** Real path points in (tMs-windowMs, tMs], each as [lat, lon, age01] (0=newest,1=oldest). */
+/** Real path points in [tMs-windowMs, tMs], each as [lat, lon, age01] (0=newest,1=oldest). */
 export function trailPointsAt(track: AisTrack, tMs: number, windowMs: number): Array<[number, number, number]> {
   const out: Array<[number, number, number]> = [];
   for (const p of track.path) {

@@ -8,9 +8,12 @@ import type { ShipCategory } from '../palette';
 export function joinTwport(track: AisTrack, vessels: VesselRecord[]): VesselRecord | null {
   if (track.imo) { const m = vessels.find((v) => v.imo && v.imo === track.imo); if (m) return m; }
   if (track.callSign) { const m = vessels.find((v) => v.callSign && v.callSign === track.callSign); if (m) return m; }
-  if (track.name) {
-    const n = track.name.trim().toUpperCase();
-    const m = vessels.find((v) => v.nameEn.trim().toUpperCase() === n || v.nameZh.trim() === track.name.trim());
+  const n = track.name.trim().toUpperCase();
+  if (n) {
+    const nameZh = track.name.trim();
+    const m = vessels.find(
+      (v) => (v.nameEn.trim() && v.nameEn.trim().toUpperCase() === n) || (v.nameZh.trim() && v.nameZh.trim() === nameZh),
+    );
     if (m) return m;
   }
   return null;

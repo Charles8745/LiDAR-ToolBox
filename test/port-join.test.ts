@@ -25,6 +25,10 @@ describe('joinTwport', () => {
   it('returns null when nothing matches', () => {
     expect(joinTwport(trk({ imo: '0000' }), vessels)).toBeNull();
   });
+  it('does not match a whitespace-only track name against a vessel with empty names', () => {
+    const blank = [rec({ nameZh: '', nameEn: '', imo: '', callSign: '' })];
+    expect(joinTwport(trk({ name: '   ' }), blank)).toBeNull();
+  });
 });
 
 describe('categoryForTrack', () => {

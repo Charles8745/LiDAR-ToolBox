@@ -51,8 +51,8 @@ describe('trailPointsAt', () => {
     expect(trail[0][2]).toBeCloseTo(1, 1);
     expect(trail[trail.length - 1][2]).toBeCloseTo(0, 1);
   });
-  it('is empty for a stationary single-sample-in-window vessel beyond window', () => {
-    expect(trailPointsAt(t, 0, 120_000).length).toBeLessThanOrEqual(1);
+  it('excludes future points (only the current sample qualifies)', () => {
+    expect(trailPointsAt(t, 0, 120_000).length).toBe(1);
   });
 });
 
