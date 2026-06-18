@@ -73,17 +73,19 @@ record-ais.ts  ──每30s──▶  raw-khh-<date>.jsonl              讀 trac
 
 ### 4.3 回放與時間模型 `time/ais-replay.ts`(純函式、可測)
 - `positionAt(track, tMs) → {lat, lon, headingDeg} | null`:在 `path` 找夾住 `t` 的兩點**線性插值**(經緯度 + heading);`t` 在該船 path 範圍外 → `null`(該時刻不存在)。
-- `trailPointsAt(track, tMs, windowMs) → [lat,lon,age01][]`:回傳 `t` 之前 `windowMs` 內的真實 path 點 + 各點老化比(供淡出);只對有移動的船產生非空拖尾。
+  - **朝向(heading)優先序**:AIS `heading`(船艏向)→ 移動中用 `COG` → 皆無則用 path 兩點方位角。**heading 用最短弧角度插值**(不可線性,否則 359°→1° 會整艘轉一圈)。
+- `trailPointsAt(track, tMs, windowMs) → [lat,lon,age01][]`:回傳 `t` 之前 `windowMs` 內的真實 path 點 + 各點老化比(供淡出);只對有移動的船產生非空拖尾。**`windowMs` 為分鐘級(預設 ~15 分鐘 / 最近 M 點)**,因 MPB 船位多為分鐘級更新,秒級窗會抓不到點。
 - `vesselsInPortAt(tracks, tMs) → count`:該時刻落在 bbox 內的船數(供 KPI / 趨勢)。
 - `incomingAt(tracks, tMs, windowMs) → AisTrack[]`:此刻在 bbox 外、但於 `windowMs` 內**進入** bbox 的船(啟發式進港判斷;語義較粗,記入誠實邊界)。
 
 ### 4.4 app 組裝(`main.ts` 改寫)
-- 讀 `ais-tracks/*.json`(`import.meta.glob`,同 snapshot 模式)。
+- 讀 `ais-tracks/*.json`(`import.meta.glob`)→ **取檔名日期最新的那個**(非第一個);24h 大檔不 commit,放進資料夾即被選用。
 - 時間軸:`overlay.setTimeRange` / `setTrend` / scrubber 改吃 `meta.fromMs–meta.toMs`(取代 TWPort `nowMs±12h`)。
 - **回放 ticker**:~10–15Hz 推進 `currentMs`、呼叫輕量 `updateShips(t)`;不在每個 rAF 全量重建。
-- 渲染(**引擎零改動**):沿用 `shipPC`(PointCloud,bloom 群組1)。每 tick:對每艘 `positionAt` 有解的船,在插值位置用真實 heading 定向畫 footprint(取樣保持精簡);拖尾用 `trailPointsAt` 的稀疏真實點,以 `value`/brightness 沿尾端淡出(同一 PointCloud)。
+- 渲染(**引擎零改動**):沿用 `shipPC`(PointCloud,bloom 群組1)。每 tick:對每艘 `positionAt` 有解的船,在插值位置用 §4.3 朝向畫 footprint(取樣精簡、**小船降取樣**控制總點數);拖尾用 `trailPointsAt` 的稀疏真實點,以 `value`/brightness 沿尾端淡出(同一 PointCloud)。
+- **點船挑選**:click-pick 改接 AIS 船中心(取代 `buildShipLayer` 的 `shipCenters`),詳情卡用 §4.5 join 結果。
 - 退掉 `buildShipLayer` 的合成 `BERTH_LINE` 路徑;`berths.ts` / `buildShipLayer` **保留**(F3 可能用、既有測試不動)。
-- KPI / 趨勢 / 進港:全部改由 §4.3 的 AIS 函式算(`vesselsInPortAt` / `incomingAt`),沿用現有 incoming 琥珀標記層與 overlay 介面。
+- KPI / 趨勢 / 進港:全部改由 §4.3 的 AIS 函式算。**KPI 語義改變**:不再是「佔用泊位 X/121」(AIS 不告訴你佔哪個泊位),改為誠實的「**範圍內 AIS 船數**」(含海峽過路/外海錨泊,非靠泊數)→ 需調整 `overlay.ts` KPI 區與標籤。沿用現有 incoming 琥珀標記層。
 
 ### 4.5 TWPort 靜態 enrich `data/join.ts`(可測)
 - `joinTwport(track, vessels[]) → VesselRecord | null`:用 **IMO(主)→ callSign(次)→ 船名(備援)** 配對。`VesselRecord` **無 mmsi 欄位**,故不以 mmsi join。
@@ -96,9 +98,10 @@ record-ais.ts  ──每30s──▶  raw-khh-<date>.jsonl              讀 trac
 3. MPB 端點需台灣 IP;非 TW 環境回空資料(已知限制)。
 4. 短窗 snapshot 時間軸短、船數少,屬預期;24h 檔由獨立機器產生後替換。
 5. 「進港(incoming)」為 bbox 進入啟發式判斷,非官方進港報告,語義較粗。
+6. KPI「範圍內 AIS 船數」含海峽過路/外海錨泊,**非靠泊泊位數**;AIS 無法得知佔哪個泊位,故拿掉 X/121 語義。
 
 ## 6. 測試與品質門檻
-- **單元測試**(node,沿用專案慣例):`ais.ts`(parse / 時間 / bbox / 聚合去重 / 清洗 / anomaly / 保留靜止船)、`ais-replay.ts`(插值 / 端點 null / 拖尾窗 / in-port 計數 / incoming)、`join.ts`(IMO→呼號→船名 配對與 miss)。
+- **單元測試**(node,沿用專案慣例):`ais.ts`(parse / 時間 / bbox / 聚合去重 / 清洗 / anomaly / 保留靜止船)、`ais-replay.ts`(經緯度插值 / **heading 最短弧插值與朝向優先序** / 端點 null / 拖尾窗 / in-port 計數 / incoming)、`join.ts`(IMO→呼號→船名 配對與 miss)。
 - **不破既有**:`tsc --noEmit` 0、`npm run build` ok、既有 120 綠不退。
 - **目視驗證**(`npm run dev` + 瀏覽器):船在水面(非陸地)、沿真實航跡移動、拖尾淡出、scrub 連動、KPI/趨勢隨 AIS 變動、點船出(join 到的)中文詳情卡。
 
