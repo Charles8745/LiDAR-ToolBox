@@ -130,3 +130,18 @@ describe('cleanTracks', () => {
     expect(cleanTracks([trk('416000123', [])])).toHaveLength(0);
   });
 });
+
+import { mapAisTypeToCategory } from '../examples/kaohsiung-port/data/ais';
+
+describe('mapAisTypeToCategory', () => {
+  it('maps AIS ship-type codes to our coarse categories', () => {
+    expect(mapAisTypeToCategory(85)).toBe('油品'); // tanker 80–89
+    expect(mapAisTypeToCategory(74)).toBe('散雜'); // cargo 70–79
+    expect(mapAisTypeToCategory(60)).toBe('客運'); // passenger 60–69
+    expect(mapAisTypeToCategory(35)).toBe('軍艦'); // military
+    expect(mapAisTypeToCategory(52)).toBe('工作'); // tug
+    expect(mapAisTypeToCategory(30)).toBe('工作'); // fishing
+    expect(mapAisTypeToCategory(0)).toBe('其他');
+    expect(mapAisTypeToCategory(99)).toBe('其他');
+  });
+});

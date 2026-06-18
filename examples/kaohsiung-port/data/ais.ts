@@ -1,3 +1,5 @@
+import type { ShipCategory } from '../palette';
+
 export interface BBox { s: number; n: number; w: number; e: number; }
 
 export interface AisPing {
@@ -164,4 +166,15 @@ export function cleanTracks(tracks: AisTrack[]): AisTrack[] {
     if (path.length > 0) out.push({ ...t, path });
   }
   return out;
+}
+
+/** AIS ship-type code (0–99) → coarse category. AIS can't split container/bulk/LNG;
+ *  callers should prefer TWPort SHIP_TYPE_NAME when a join exists (see data/join.ts). */
+export function mapAisTypeToCategory(code: number): ShipCategory {
+  if (code >= 80 && code <= 89) return '油品';
+  if (code >= 70 && code <= 79) return '散雜';
+  if (code >= 60 && code <= 69) return '客運';
+  if (code === 35) return '軍艦';
+  if (code === 30 || (code >= 31 && code <= 32) || (code >= 50 && code <= 59)) return '工作';
+  return '其他';
 }
