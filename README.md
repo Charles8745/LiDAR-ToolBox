@@ -2,20 +2,35 @@
 
 A reusable LiDAR-style point-cloud scanning engine for the web (Scanner Sombre style), built on Three.js + three-mesh-bvh. A fixed core pipeline reveals a scene as an accumulating, depth-colored point cloud; three swappable slots (what is scanned, how rays are cast, how distance maps to color) let you retarget it without touching the core.
 
+## Showcase — 高雄港 LiDAR 戰情室 (Kaohsiung port digital twin)
+
+A dark "situation-room" digital twin of the Port of Kaohsiung, built on this engine from **real geographic data** — OSM coastline / piers / breakwaters / storage tanks / cranes / anchorages, Taiwan Port Corp. (TWPort) berth-occupancy snapshots, and an NLSC aerial orthophoto basemap — all on one shared local projection.
+
+![Kaohsiung port war-room](docs/assets/kaohsiung-warroom.jpeg)
+
+Each feature category is an independent point-cloud layer (config-driven registry) with its own colour / brightness / size / glow; storage tanks and cranes are rendered as 3D point volumes. Selective multi-group bloom, a scrub-able 24-hour occupancy timeline, ship-type vs status views, and live tuning via `window.__twin`. The colour hierarchy keeps saturated **ships** (data) and the red **incoming** marker (alert) reading against neutral-grey **landmarks** and dim cool-grey **structure**.
+
+```bash
+npm run dev
+# open the printed URL, then go to /examples/kaohsiung-port/index.html
+```
+
+Data is read from frozen, reproducible snapshots; refresh them with `npm run port:fetch` (TWPort), `npm run port:osm` (OSM), `npm run port:basemap` (NLSC). See [docs/vscode-dev-guide.md](docs/vscode-dev-guide.md) for the tuning/dev guide and `docs/superpowers/` for the specs & plans.
+
 ## Install
 
 ```bash
 npm install
 ```
 
-## Run the example
+## Run the engine demo
 
 ```bash
 npm run dev
 # open the printed URL, then go to /examples/basic/index.html
 ```
 
-Move the mouse to scan the darkness, drag to look around, Space to clear. The HUD buttons swap the color ramp, emitter, and persistence mode live.
+The cave demo for the bare engine: move the mouse to scan the darkness, drag to look around, Space to clear. The HUD buttons swap the color ramp, emitter, and persistence mode live.
 
 ## Test
 
