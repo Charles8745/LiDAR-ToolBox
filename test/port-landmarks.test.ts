@@ -24,3 +24,23 @@ describe('sampleCylinderShell', () => {
     }
   });
 });
+
+import { sampleGantry } from '../examples/kaohsiung-port/scene/landmarks';
+
+describe('sampleGantry', () => {
+  const pts = sampleGantry({ x: 0, z: 0 }, 0, { legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.1 });
+  it('emits xyz triples', () => {
+    expect(pts.length).toBeGreaterThan(0);
+    expect(pts.length % 3).toBe(0);
+  });
+  it('rises to legHeight and extends along +x by the boom', () => {
+    let maxY = -Infinity, minY = Infinity, maxX = -Infinity;
+    for (let i = 0; i < pts.length; i += 3) {
+      maxY = Math.max(maxY, pts[i + 1]); minY = Math.min(minY, pts[i + 1]);
+      maxX = Math.max(maxX, pts[i]);
+    }
+    expect(maxY).toBeCloseTo(0.6);          // top
+    expect(minY).toBeCloseTo(0);            // base
+    expect(maxX).toBeCloseTo(0.2 + 0.5);    // hw(0.2) + boomLen(0.5)
+  });
+});
