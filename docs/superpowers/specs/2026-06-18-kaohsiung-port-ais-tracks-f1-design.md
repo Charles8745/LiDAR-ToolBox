@@ -68,12 +68,13 @@ record-ais.ts  ──每30s──▶  raw-khh-<date>.jsonl              讀 trac
     ```
     { meta: { fromMs, toMs, count, bbox },
       ships: [ { mmsi, imo, callSign, name, aisType, loaM?, beamM?,
-                 path: [[lat, lon, tMs], ...] } ] }
+                 path: [[lat, lon, tMs, hdgDeg], ...] } ] }
+      // path point 為 4-tuple;hdgDeg = -1 表示該點無 AIS 船艏向(回放時改用點間方位角)。
     ```
 
 ### 4.3 回放與時間模型 `time/ais-replay.ts`(純函式、可測)
 - `positionAt(track, tMs) → {lat, lon, headingDeg} | null`:在 `path` 找夾住 `t` 的兩點**線性插值**(經緯度 + heading);`t` 在該船 path 範圍外 → `null`(該時刻不存在)。
-  - **朝向(heading)優先序**:AIS `heading`(船艏向)→ 移動中用 `COG` → 皆無則用 path 兩點方位角。**heading 用最短弧角度插值**(不可線性,否則 359°→1° 會整艘轉一圈)。
+  - **朝向(heading)優先序(2 段)**:AIS `heading`(船艏向)→ 無則用 path 兩點方位角(bearing)。**heading 用最短弧角度插值**(不可線性,否則 359°→1° 會整艘轉一圈)。COG tier 刻意不做:移動時 COG 與點間方位角近乎等價,且 path 僅存 heading 不存 COG。
 - `trailPointsAt(track, tMs, windowMs) → [lat,lon,age01][]`:回傳 `t` 之前 `windowMs` 內的真實 path 點 + 各點老化比(供淡出);只對有移動的船產生非空拖尾。**`windowMs` 為分鐘級(預設 ~15 分鐘 / 最近 M 點)**,因 MPB 船位多為分鐘級更新,秒級窗會抓不到點。
 - `vesselsInPortAt(tracks, tMs) → count`:該時刻落在 bbox 內的船數(供 KPI / 趨勢)。
 - `incomingAt(tracks, tMs, windowMs) → AisTrack[]`:此刻在 bbox 外、但於 `windowMs` 內**進入** bbox 的船(啟發式進港判斷;語義較粗,記入誠實邊界)。
@@ -99,6 +100,8 @@ record-ais.ts  ──每30s──▶  raw-khh-<date>.jsonl              讀 trac
 4. 短窗 snapshot 時間軸短、船數少,屬預期;24h 檔由獨立機器產生後替換。
 5. 「進港(incoming)」為 bbox 進入啟發式判斷,非官方進港報告,語義較粗。
 6. KPI「範圍內 AIS 船數」含海峽過路/外海錨泊,**非靠泊泊位數**;AIS 無法得知佔哪個泊位,故拿掉 X/121 語義。
+7. 移動船無 AIS heading 時,航向以**點間方位角**近似(等價於 COG 的常見情形);非原始 COG 欄位。
+8. 未 join 到 TWPort 的貨櫃/LNG 船,因 AIS type code 無法細分,會顯示為「散雜/其他」(屬已揭露的粗對映,非分類 bug)。
 
 ## 6. 測試與品質門檻
 - **單元測試**(node,沿用專案慣例):`ais.ts`(parse / 時間 / bbox / 聚合去重 / 清洗 / anomaly / 保留靜止船)、`ais-replay.ts`(經緯度插值 / **heading 最短弧插值與朝向優先序** / 端點 null / 拖尾窗 / in-port 計數 / incoming)、`join.ts`(IMO→呼號→船名 配對與 miss)。
