@@ -39,7 +39,7 @@ const TRAIL_MS = 15 * 60_000; // 拖尾窗 15 分鐘
 const INCOMING_WINDOW = 30 * 60_000; // 進港前瞻 30 分鐘
 
 // 進港標記的顏色與閃爍頻率 —— 直接改這兩個值。
-const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(目前琥珀)
+const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(紅 — 警示,bloom 最強)
 const INCOMING_PULSE_HZ = 0.8; // 每秒閃幾次(0 = 不閃)
 
 // Static layers (one independent PointCloud per category) — config-driven; tune via __twin.layers.
@@ -71,8 +71,6 @@ const incPC = new PointCloud({
   persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
   pulseHz: INCOMING_PULSE_HZ,
 });
-
-// TYPE_DIMS_M:import 已於 Step 1 併入頂部 ./scene/portPoints import(export 見 Step 3a);此處勿再放 import。
 
 interface AisCenter { track: AisTrack; vessel: VesselRecord | null; x: number; y: number; z: number; }
 let shipCenters: AisCenter[] = [];
