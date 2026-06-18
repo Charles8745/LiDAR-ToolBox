@@ -6,3 +6,7 @@ dist/
 
 # playwright / local screenshots
 .playwright-mcp/
+
+# AIS recorder raw logs (large) + probe samples — only the exported short-window khh-*.json is committed
+examples/kaohsiung-port/data/ais-tracks/raw-khh-*.jsonl
+examples/kaohsiung-port/data/ais-tracks/_probe-sample.json
