@@ -8,7 +8,7 @@ import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, statusIndex, valu
 import { createOverlay } from './ui/overlay';
 import type { VesselRecord } from './data/twport';
 import type { AisTrack, AisTracksFile } from './data/ais';
-import { positionAt, trailPointsAt, vesselsInPortAt, incomingAt } from './time/ais-replay';
+import { positionAt, vesselsInPortAt, incomingAt } from './time/ais-replay';
 import { joinTwport, categoryForTrack } from './data/join';
 import type { OsmGeometry } from './data/osm';
 import osmData from './data/osm-khh.json';
@@ -42,7 +42,6 @@ for (let i = 0, best = -1; i <= 60; i++) {
   const n = vesselsInPortAt(tracks, tt);
   if (n > best) { best = n; nowMs = tt; }
 }
-const TRAIL_MS = 15 * 60_000; // 拖尾窗 15 分鐘
 const INCOMING_WINDOW = 30 * 60_000; // 進港前瞻 30 分鐘
 
 // 進港標記的顏色與閃爍頻率 —— 直接改這兩個值。
@@ -104,11 +103,6 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
     // 小船降取樣:大船細、小船粗
     const spacing = loaU > 1.5 ? 0.15 : 0.3;
     for (const p of sampleShipFootprint(c, loaU, beamU, h, spacing)) { pos.push(p.x, SHIP_Y, p.z); val.push(v01); }
-    // 拖尾:稀疏真實點,沿尾端淡出(用較低的 value 當「暗」近似,或同色)
-    for (const tp of trailPointsAt(t, tMs, TRAIL_MS)) {
-      const w = proj.toWorld(tp[0], tp[1]);
-      pos.push(w.x, SHIP_Y, w.z); val.push(v01 * (1 - tp[2] * 0.7));
-    }
     centers.push({ track: t, vessel: joinTwport(t, allVessels), x: c.x, y: SHIP_Y, z: c.z });
   }
   shipCenters = centers;
