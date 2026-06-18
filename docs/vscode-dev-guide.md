@@ -214,6 +214,35 @@ incPC.setPulseHz(2);  // 執行期改頻率;0 = 恆亮
 - **改 `Y_SHIP` 會連帶影響點擊挑選**:`buildShipLayer` 把同一個 `Y_SHIP` 寫進 `centers.y`,而 `main.ts` 點船是用 `centers` 投影到螢幕做最近距離比對——只要點雲與 `centers` 用同一常數(現況如此)就一致、不會點不到。
 - 想避免相鄰層 z-fighting / 互相遮擋,讓各層 y 值保持間隔即可(底圖最低、船最高)。Console 即時試:`__twin.shipPC.points.position.y = 3; `(整層平移,暫時性,⌘R 還原)。
 
+### 4h. 圖層 registry(每類別獨立點雲)
+
+靜態地物改成**每類別一個獨立 PointCloud 圖層**,由 `main.ts` 頂部的 `LAYERS` 設定陣列(單一事實來源)+ `scene/layers.ts` 的 `buildLayers` 建出。每筆設定描述一個圖層的所有旋鈕。
+
+| 欄位 | 說明 |
+|---|---|
+| `key` / `label` | 識別字 / 顯示名 |
+| `source` | 對應 `osm` 的哪個欄位(coastline/piers/breakwater/tanks/cranes/anchorages) |
+| `kind` | `line`(海岸線/碼頭/防波堤)、`cylinder`(儲槽 3D)、`gantry`(起重機 3D)、`zone`(錨地圈) |
+| `color` | 單色 `[R,G,B]` 0–255 |
+| `pointSize` / `maxPointSize` | 點大小 / 上限 |
+| `brightness` / `pulseHz` | 亮度倍率(預設 1)/ 閃爍頻率(預設 0) |
+| `bloomGroup` | 指派 bloom 群組(結構=3、地標=4) |
+| `baseY` / `visible` | 基準高度 / 預設開關 |
+| kind 專屬 | cylinder:`height`/`rings`/`perRing`;gantry:`legHeight`/`baseW`/`baseD`/`boomLen`/`spacing`;zone:`radius`/`ringCount`/`spacing`;line:`spacing` |
+
+3D 點產生器在 `scene/landmarks.ts`(`sampleCylinderShell` 圓柱殼、`sampleGantry` 龍門骨架、`sampleZoneRing` 錨地圈,皆純函式可測)。
+
+**Console 即時調(每層獨立)**:
+```js
+__twin.layers.tank.setVisible(false)        // 關掉儲槽
+__twin.layers.crane.setColor([255,140,0])   // 起重機改橙
+__twin.layers.coastline.setBrightness(1.5)  // 海岸線變亮
+__twin.layers.breakwater.setSize(4)         // 防波堤點放大
+__twin.layers.anchorage.setPulseHz(0.5)     // 錨地慢閃
+__twin.layers.anchorage.setVisible(false)   // 錨地圈很大很亮,可關掉或調暗
+```
+新增/移除一個類別 = 改 `main.ts` 的 `LAYERS` 一筆設定。引擎 `PointCloud` 為此新增了 `setPointSize()`(會一併抬高 `uMaxPointSize` 上限)與 `setBrightness()`(`uBrightness` 倍率)。
+
 ## 5. `__twin` 除錯把手(Console)
 
 `main.ts` 把這些掛在 `window.__twin`(+ `overlay.ts` 掛 `window.__reviveGlass`):
@@ -221,7 +250,8 @@ incPC.setPulseHz(2);  // 執行期改頻率;0 = 恆亮
 | 把手 | 用途 |
 |---|---|
 | `__twin.engine` | `LidarEngine`(`.scene` / `.camera3D` / `.renderer`) |
-| `__twin.basePC / shipPC / incPC` | 三層 `PointCloud`(`.setPulseHz`、`.points.material.uniforms`…) |
+| `__twin.shipPC / incPC` | 船 / 進港層 `PointCloud`(`.setPulseHz`、`.points.material.uniforms`…) |
+| `__twin.layers.<key>` | 六個靜態圖層的 handle(coastline/pier/breakwater/tank/crane/anchorage);`.setVisible/.setColor/.setBrightness/.setSize/.setPulseHz` |
 | `__twin.mapPlane` | 航照底圖 mesh(`.visible` / `.material.opacity`) |
 | `__twin.setBasemapTint(0x……)` | 即時改底圖染色 |
 | `__twin.rebuildShips(tMs, mode, enabled?)` | 重建船層 |
