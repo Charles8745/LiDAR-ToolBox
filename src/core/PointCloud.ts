@@ -72,6 +72,7 @@ export class PointCloud {
         uMaxPointSize: { value: Math.max(opts.maxPointSize ?? 5, opts.pointSize ?? 2, 1) },
         uSizeAttenuation: { value: opts.sizeAttenuation === false ? 0 : 1 },
         uPulseHz: { value: opts.pulseHz ?? 0 },
+        uBrightness: { value: 1 },
       },
       vertexShader,
       fragmentShader,
@@ -167,6 +168,11 @@ export class PointCloud {
   /** Set the brightness blink frequency in Hz (0 = steady). */
   setPulseHz(hz: number): void {
     this.material.uniforms.uPulseHz.value = hz;
+  }
+
+  /** Set the global brightness multiplier (1 = unchanged). */
+  setBrightness(b: number): void {
+    this.material.uniforms.uBrightness.value = b;
   }
 
   /** Set the base point size in pixels; raises the uMaxPointSize cap if needed so larger sizes still render. */

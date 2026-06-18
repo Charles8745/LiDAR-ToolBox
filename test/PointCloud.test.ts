@@ -182,3 +182,12 @@ describe('PointCloud.setPointSize', () => {
     expect((pc.points.material as THREE.ShaderMaterial).uniforms.uMaxPointSize.value).toBeGreaterThanOrEqual(9);
   });
 });
+
+describe('PointCloud.setBrightness', () => {
+  it('defaults uBrightness to 1 and setBrightness() changes it', () => {
+    const pc = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate' });
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uBrightness.value).toBe(1);
+    pc.setBrightness(2.5);
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uBrightness.value).toBe(2.5);
+  });
+});
