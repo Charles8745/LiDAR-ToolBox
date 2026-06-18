@@ -140,12 +140,13 @@ document.querySelectorAll('#overlay .lg-stat, #overlay .lg-card').forEach(e => e
 | 進港標記**顏色** | `main.ts` 頂部 `INCOMING_COLOR` | `[R,G,B]` 0–255 |
 | 進港標記**閃爍頻率** | `main.ts` 頂部 `INCOMING_PULSE_HZ` | 每秒幾次,0=不閃(見 §4e) |
 | **各群組 bloom** 強度 | `main.ts` engine `bloom: [ … ]` 陣列 | 每組 `{ layer, strength, radius, threshold }`(見 §4d) |
-| 哪些層**發光** + 屬哪組 | `main.ts` `engine.addLayer(pc.points, { bloom: <層號> })` | 省略=不發光 |
+| 哪些層**發光** + 屬哪組 | 靜態層→`LAYERS` 的 `bloomGroup`;船/進港→`main.ts` `engine.addLayer(pc.points, { bloom: <層號> })` | 群1=船、群2=進港、群3=結構、群4=地標 |
 | 底圖明暗 / 透明度 | `main.ts` `buildBasemapPlane()` 的 `MeshBasicMaterial({ color, opacity })` | 色越小越暗 |
 | 霧濃淡 / 距離 | `main.ts` engine `fog: { color, near, far }` | near 變小→霧更早起 |
 | 玻璃面板透明度 | `ui/theme.css` `--lg-tint` | 第 4 值(alpha)越大→越暗實、字越清楚 |
 | 文字 / 重點 / 警示色 | `ui/theme.css` `--ink` / `--lg-accent` / `--signal-warn` / `--signal-ok` | hex |
-| 船型 8 類別色 | `palette.ts` `SHIP_CATEGORY_COLORS` | `[R,G,B][]`(中性底上唯一彩色) |
+| 船型 8 類別色 | `palette.ts` `SHIP_CATEGORY_COLORS` | `[R,G,B][]`(資料層,場景主色) |
+| 靜態層(碼頭/儲槽/起重機…)顏色 / 亮度 | `main.ts` `LAYERS` 各筆的 `color` / `brightness`(見 §4h) | `[R,G,B]` / 倍率(預設 1);設計上壓成中性讓船突出 |
 
 **大小 / 位置** — 在 `ui/overlay.ts`(卡片內距在 `theme.css`):
 
@@ -158,7 +159,9 @@ document.querySelectorAll('#overlay .lg-stat, #overlay .lg-card').forEach(e => e
 | 環形儀表大小(正圓) | `gauge` 建立後設 `width=height` + `alignSelf:center` | 寬≠高會變橢圓 |
 | 各卡片字級 | 各 `innerHTML` 的 `font-size` | 10 / 12px |
 | 3D 取景距離 / 角度 | `main.ts` `dist` 與 `cameraPosition` | `dist = radius*1.7 + 30` |
-| 點雲各層高度(y 堆疊) | `portPoints.ts` `Y_WATER`/`Y_SHIP`、`main.ts` 進港 `0.8`/底圖 `-0.5`(見 §4g) | 底圖 -0.5 / 海岸線 0 / 進港 0.8 / 船 1.5 |
+| 船 / 進港標記 點大小 | `main.ts` `shipPC` / `incPC` 的 `pointSize` / `maxPointSize` | 像素(`sizeAttenuation:false`) |
+| 靜態層 點大小 | `main.ts` `LAYERS` 各筆的 `pointSize` / `maxPointSize`(見 §4h) | 像素 |
+| 點雲各層高度(y 堆疊) | 靜態層→`LAYERS` 的 `baseY`;船→`portPoints.ts` `Y_SHIP`;進港→`rebuildIncoming` 的 y;底圖→`buildBasemapPlane` 的 `position.set`(見 §4g) | 底圖 0 / 靜態 0(錨地 0.05)/ 船 0.5 / 進港 1.5 |
 
 ### 4d. 多群組 bloom(各層獨立發光參數)
 
@@ -175,6 +178,7 @@ engine.addLayer(incPC.points,  { bloom: 2 });
 - `strength` 光暈亮度、`radius` 擴散(0–1)、`threshold` 只有比它亮的像素發光。
 - 想加第三組:`bloom` 陣列加一筆 `{ layer: 3, … }`,再 `addLayer(x, { bloom: 3 })`。
 - 單一物件 `{ strength, radius, threshold }`(非陣列)= 一個群組在預設 `BLOOM_LAYER`(向後相容)。
+- **目前現場是 4 組**,發光強度刻意分主次:進港(群2)> 船(群1)> 地標儲槽/起重機(群4)> 結構海岸線/碼頭(群3)。資料(船)與警示(進港)最亮,基礎設施壓暗退到背景。
 
 ### 4e. 點雲閃爍(pulse)與顏色
 
@@ -200,19 +204,19 @@ incPC.setPulseHz(2);  // 執行期改頻率;0 = 恆亮
 
 | 層 | 目前 y | 永久生效的位置 |
 |---|---|---|
-| 航照底圖平面 | `-0.5` | `main.ts` `buildBasemapPlane()` 的 `mesh.position.set(…, -0.5, …)` |
-| 底層點雲(海岸線 + 碼頭) | `0`(`Y_WATER`) | `scene/portPoints.ts` 頂部常數 `Y_WATER`(只被 `buildBaseLayer` 引用) |
-| 進港標記 | `0.8`(寫死) | `main.ts` `rebuildIncoming()` 的 `pos.push(p.x, 0.8, p.z)` |
-| 船舶點雲 | `1.5`(`Y_SHIP`) | `scene/portPoints.ts` 頂部常數 `Y_SHIP`(`buildShipLayer` 用,亦寫進 `centers.y`) |
+| 航照底圖平面 | `0` | `main.ts` `buildBasemapPlane()` 的 `mesh.position.set(…, 0, …)` |
+| 靜態層(海岸線/碼頭/防波堤/儲槽/起重機) | `baseY`(預設 `0`) | `main.ts` `LAYERS` 各筆的 `baseY` |
+| 錨地圈 | `0.05` | `LAYERS` anchorage 的 `baseY` |
+| 船舶點雲 | `0.5`(`Y_SHIP`) | `scene/portPoints.ts` 頂部常數 `Y_SHIP`(`buildShipLayer` 用,亦寫進 `centers.y`) |
+| 進港標記 | `1.5`(寫死) | `main.ts` `rebuildIncoming()` 的 `pos.push(p.x, 1.5, p.z)` |
 
-- **改底層 / 船層** 最乾淨的是改 `scene/portPoints.ts` 最上面那兩個常數(各只被引用一處):
-  ```ts
-  const Y_WATER = 0;    // 海岸線 + 碼頭的高度
-  const Y_SHIP  = 1.5;  // 船舶點雲的高度
-  ```
-- **單位換算**:`WORLD_SCALE = 0.01`(1 單位 = 100m),所以 `Y_SHIP = 1.5` ≈ 真實 150m 高。這裡純粹是視覺分層,別當公尺解讀。
-- **改 `Y_SHIP` 會連帶影響點擊挑選**:`buildShipLayer` 把同一個 `Y_SHIP` 寫進 `centers.y`,而 `main.ts` 點船是用 `centers` 投影到螢幕做最近距離比對——只要點雲與 `centers` 用同一常數(現況如此)就一致、不會點不到。
-- 想避免相鄰層 z-fighting / 互相遮擋,讓各層 y 值保持間隔即可(底圖最低、船最高)。Console 即時試:`__twin.shipPC.points.position.y = 3; `(整層平移,暫時性,⌘R 還原)。
+> F4 之後 `Y_WATER` 已移除;靜態層高度改由各層 `LAYERS` 的 `baseY` 控制(3D 的儲槽/起重機從 `baseY` 往上長 `height`/`legHeight`)。
+
+- **靜態層高度**:改該層 `LAYERS` 的 `baseY`。
+- **船層高度**:改 `scene/portPoints.ts` 的 `Y_SHIP`(只被 `buildShipLayer` 引用)。
+- **單位換算**:`WORLD_SCALE = 0.01`(1 單位 = 100m),所以 `Y_SHIP = 0.5` ≈ 真實 50m 高。純視覺分層,別當公尺解讀。
+- **改 `Y_SHIP` 會連帶影響點擊挑選**:`buildShipLayer` 把同一個 `Y_SHIP` 寫進 `centers.y`,而 `main.ts` 點船是用 `centers` 投影到螢幕做最近距離比對——用同一常數(現況)即一致。
+- Console 即時平移整層試:`__twin.shipPC.points.position.y = 3`(暫時,⌘R 還原)。
 
 ### 4h. 圖層 registry(每類別獨立點雲)
 
