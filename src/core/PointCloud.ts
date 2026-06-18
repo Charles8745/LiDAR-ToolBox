@@ -169,6 +169,14 @@ export class PointCloud {
     this.material.uniforms.uPulseHz.value = hz;
   }
 
+  /** Set the base point size in pixels; raises the uMaxPointSize cap if needed so larger sizes still render. */
+  setPointSize(px: number): void {
+    this.material.uniforms.uPointSize.value = px;
+    if (px > this.material.uniforms.uMaxPointSize.value) {
+      this.material.uniforms.uMaxPointSize.value = px;
+    }
+  }
+
   clear(): void {
     this.ring.clear();
     this.geometry.setDrawRange(0, 0);

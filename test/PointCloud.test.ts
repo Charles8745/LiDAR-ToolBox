@@ -167,3 +167,18 @@ describe('PointCloud pulse', () => {
     expect((blink.points.material as THREE.ShaderMaterial).uniforms.uPulseHz.value).toBe(3);
   });
 });
+
+describe('PointCloud.setPointSize', () => {
+  it('drives uPointSize from the option and setPointSize()', () => {
+    const pc = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate', pointSize: 2 });
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uPointSize.value).toBe(2);
+    pc.setPointSize(7);
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uPointSize.value).toBe(7);
+  });
+  it('raises uMaxPointSize so a size above the cap actually renders', () => {
+    const pc = new PointCloud({ capacity: 2, ramp, persistence: 'accumulate', pointSize: 2, maxPointSize: 3 });
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uMaxPointSize.value).toBe(3);
+    pc.setPointSize(9);
+    expect((pc.points.material as THREE.ShaderMaterial).uniforms.uMaxPointSize.value).toBeGreaterThanOrEqual(9);
+  });
+});
