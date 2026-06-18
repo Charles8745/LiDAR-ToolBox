@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { parseOsmWays } from './osm';
+import { parseOsm } from './osm';
 
 const QUERY = `[out:json][timeout:90];
 (
@@ -19,7 +19,7 @@ const res = await fetch('https://overpass-api.de/api/interpreter', {
   },
 });
 if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-const geo = parseOsmWays(await res.json());
+const geo = parseOsm(await res.json());
 const here = dirname(fileURLToPath(import.meta.url));
 const path = resolve(here, 'osm-khh.json');
 writeFileSync(path, JSON.stringify(geo));
