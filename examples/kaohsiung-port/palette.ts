@@ -11,9 +11,18 @@ const TYPE_TO_CATEGORY: Record<string, ShipCategory> = {
   '客貨船': '客運', '工作船': '工作', '漁業巡護船': '工作', '軍用艦艇': '軍艦',
 };
 
+// Ship-category colours = the scene's primary (data) colour. Balanced categorical palette
+// (Tableau-style, full hue wheel incl. blue); only red is reserved (incoming alert marker).
+// Landmarks are neutral grey now, so blue is free to anchor the most-common type (containers).
 export const SHIP_CATEGORY_COLORS: RGB[] = [
-  [90, 156, 255], [255, 174, 90], [202, 168, 106], [185, 138, 255],
-  [138, 160, 170], [90, 230, 120], [90, 220, 230], [200, 200, 210],
+  [70, 150, 235],  // 貨櫃 blue
+  [240, 150, 55],  // 油品 orange
+  [175, 120, 80],  // 散雜 brown
+  [175, 120, 225], // LNG purple
+  [230, 120, 180], // 工作 pink
+  [85, 190, 110],  // 軍艦 green
+  [60, 195, 200],  // 客運 teal
+  [180, 185, 195], // 其他 grey
 ];
 
 export function shipCategoryIndex(shipType: string): number {

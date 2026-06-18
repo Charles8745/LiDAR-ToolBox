@@ -5,7 +5,7 @@ import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projectio
 import { buildShipLayer, sampleShipFootprint, type ShipLayerResult } from './scene/portPoints';
 import { buildLayers, type LayerConfig } from './scene/layers';
 import { buildIntervals, occupancyAt, berthStatusAt, buildOccupancyTrend, buildIncomingList } from './time/occupancy';
-import { BASE_COLORS, SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from './palette';
+import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, shipCategoryIndex, statusIndex, valueFor } from './palette';
 import { MIN_BERTH, MAX_BERTH, berthPositionLatLon } from './berths';
 import { createOverlay } from './ui/overlay';
 import type { VesselRecord } from './data/twport';
@@ -36,13 +36,18 @@ const INCOMING_COLOR: [number, number, number] = [205, 38, 38]; // RGB 0–255(�
 const INCOMING_PULSE_HZ = 0.8; // 每秒閃幾次(0 = 不閃)
 
 // Static layers (one independent PointCloud per category) — config-driven; tune via __twin.layers.
+// Visual hierarchy: infrastructure is desaturated cool-grey + dim so it recedes; saturated colour
+// is reserved for the live data (ships) and alerts (incoming). See palette note below.
 const LAYERS: LayerConfig[] = [
-  { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: BASE_COLORS[0], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
-  { key: 'pier',       label: '碼頭',   source: 'piers',      kind: 'line',     color: BASE_COLORS[1], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
-  { key: 'breakwater', label: '防波堤', source: 'breakwater', kind: 'line',     color: [90, 130, 150], pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
-  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [255, 150, 60], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    height: 0.3, rings: 6, perRing: 32 },
-  { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'gantry',   color: [120, 180, 255], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.05 },
-  { key: 'anchorage',  label: '錨地',   source: 'anchorages', kind: 'zone',     color: [200, 160, 255], pointSize: 3, maxPointSize: 5, bloomGroup: 4, baseY: 0.05, radius: 1.0, ringCount: 48, spacing: 0.5 },
+  // Tier: structure (outline) — dim cool greys, barely-there glow (bloom group 3).
+  { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: [72, 92, 108],   pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8, brightness: 0.9 },
+  { key: 'pier',       label: '碼頭',   source: 'piers',      kind: 'line',     color: [96, 118, 134],  pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
+  { key: 'breakwater', label: '防波堤', source: 'breakwater', kind: 'line',     color: [60, 76, 90],    pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8, brightness: 0.85 },
+  // Tier: landmarks (3D) — neutral steel grey, distinguished by 3D shape not colour (blue is now
+  // a ship colour). Low glow (bloom group 4). Anchorage is structure-tier (bloom group 3).
+  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [118, 128, 142], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    height: 0.3, rings: 6, perRing: 32, brightness: 0.9 },
+  { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'gantry',   color: [138, 150, 166], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.05 },
+  { key: 'anchorage',  label: '錨地',   source: 'anchorages', kind: 'zone',     color: [78, 92, 108],   pointSize: 3, maxPointSize: 5, bloomGroup: 3, baseY: 0.05, radius: 1.0, ringCount: 48, spacing: 0.5, brightness: 0.7 },
 ];
 const layerHandles = buildLayers(LAYERS, osm, proj);
 
@@ -107,11 +112,12 @@ const engine = new LidarEngine({
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
+  // Glow follows the visual hierarchy: incoming(alert) > ships(data) > landmarks > structure.
   bloom: [
-    { layer: 1, strength: 0.3,  radius: 0.1, threshold: 0.1 },  // 群組1=船
-    { layer: 2, strength: 1.1,  radius: 0.5, threshold: 0.0 },  // 群組2=進港
-    { layer: 3, strength: 0.05, radius: 0.1, threshold: 0.0 },  // 群組3=結構(海岸線/碼頭/防波堤)
-    { layer: 4, strength: 0.6,  radius: 0.3, threshold: 0.0 },  // 群組4=地標(儲槽/起重機/錨地)
+    { layer: 1, strength: 0.5,  radius: 0.12, threshold: 0.05 }, // 群組1=船(資料,主角)
+    { layer: 2, strength: 1.1,  radius: 0.5,  threshold: 0.0 },  // 群組2=進港(警示,最亮)
+    { layer: 3, strength: 0.05, radius: 0.1,  threshold: 0.0 },  // 群組3=結構(海岸線/碼頭/防波堤,幾乎不發光)
+    { layer: 4, strength: 0.18, radius: 0.25, threshold: 0.0 },  // 群組4=地標(儲槽/起重機/錨地,微光退背景)
   ],
   fog: { color: 0x0b0c0e, near: dist * 0.1, far: dist * 5.0 },
 });
