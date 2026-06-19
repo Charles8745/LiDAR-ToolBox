@@ -60,8 +60,8 @@ for (const poly of osm.piers) {
   const w = poly.map((ll) => proj.toWorld(ll.lat, ll.lon));
   for (let i = 0; i < w.length - 1; i++) pierSegs.push({ ax: w[i].x, az: w[i].z, bx: w[i + 1].x, bz: w[i + 1].z });
 }
-/** 最近碼頭線段的方向 → footprint heading(讓船長軸沿碼頭)。 */
-function nearestPierHeadingRad(x: number, z: number): number {
+/** 最近碼頭線段:回傳對齊方向(footprint heading)與到該線段的距離(世界單位)。 */
+function nearestPier(x: number, z: number): { headingRad: number; distU: number } {
   let bestD = Infinity, h = 0;
   for (const s of pierSegs) {
     const dx = s.bx - s.ax, dz = s.bz - s.az;
@@ -71,21 +71,24 @@ function nearestPierHeadingRad(x: number, z: number): number {
     const d = (x - px) ** 2 + (z - pz) ** 2;
     if (d < bestD) { bestD = d; h = Math.atan2(dz, dx); }
   }
-  return h;
+  return { headingRad: h, distU: Math.sqrt(bestD) };
 }
 
 // Per-track 預算快取(類別 / TWPort join / 是否靠泊 / 碼頭朝向)—— 這些都是靜態的,
 // 不該每幀重算(M1)。靠泊判定:整段軌跡淨位移 < 100m(1 世界單位)。
-interface TrackMeta { category: ShipCategory; vessel: VesselRecord | null; stationary: boolean; pierH: number; }
+interface TrackMeta { category: ShipCategory; vessel: VesselRecord | null; pierAligned: boolean; pierH: number; }
 const trackMeta = new Map<string, TrackMeta>();
-const STATIONARY_U = 100 * WORLD_SCALE; // 淨位移 < 100m 視為靠泊(隨尺度調整)
+const STATIONARY_U = 100 * WORLD_SCALE;  // 淨位移 < 100m 視為靠泊(隨尺度調整)
+const PIER_SNAP_MAX = 300 * WORLD_SCALE; // 靠泊船離最近碼頭 < 300m 才對齊朝向;更遠(錨地)維持航向、不亂指
 for (const t of tracks) {
   const category = categoryForTrack(t, allVessels);
   const vessel = joinTwport(t, allVessels);
   const p0 = t.path[0], pl = t.path[t.path.length - 1];
   const a = proj.toWorld(p0[0], p0[1]), b = proj.toWorld(pl[0], pl[1]);
   const stationary = Math.hypot(b.x - a.x, b.z - a.z) < STATIONARY_U;
-  trackMeta.set(t.mmsi, { category, vessel, stationary, pierH: stationary ? nearestPierHeadingRad(a.x, a.z) : 0 });
+  const np = nearestPier(a.x, a.z);
+  const pierAligned = stationary && np.distU < PIER_SNAP_MAX; // 靠泊且貼近碼頭才對齊;否則(錨地/移動)用航向
+  trackMeta.set(t.mmsi, { category, vessel, pierAligned, pierH: np.headingRad });
 }
 
 // Static layers (one independent PointCloud per category) — config-driven; tune via __twin.layers.
@@ -136,7 +139,7 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
     // 朝向:靠泊船對齊最近碼頭線(L2);移動船用 AIS heading/COG 近似(此 feed 無 heading →
     // positionAt 回傳點間方位角)。heading(0=N,順時針)→ footprint headingRad,長軸對齊 (sinθ,-cosθ)。
     let h: number;
-    if (meta.stationary) h = meta.pierH;
+    if (meta.pierAligned) h = meta.pierH;
     else { const theta = rp.headingDeg * Math.PI / 180; h = Math.atan2(-Math.cos(theta), Math.sin(theta)); }
     const v01 = mode === 'type' ? valueFor(catIdx, SHIP_CATEGORY_COLORS.length) : statusVal;
     const spacing = loaU > 1.5 * S ? 0.15 * S : 0.3 * S; // 小船降取樣(隨尺度等比)
@@ -220,7 +223,7 @@ function refresh(tMs: number) {
   currentMs = tMs;
   updateShips(tMs, colorBy, filter);
   const inPort = vesselsInPortAt(tracks, tMs);
-  overlay.setKpi({ inPort, occupied: inPort, total: peakInPort, dateMs: tMs });
+  overlay.setKpi({ inPort, total: peakInPort });
   overlay.setClock(tMs);
 }
 
@@ -237,6 +240,7 @@ overlay.setIncoming(
   buildIncomingList(forecastIntervals, incomingRefMs, INCOMING_WINDOW).map((a) => ({
     berthNo: a.berthNo, name: a.vessel.nameZh || a.vessel.nameEn || '—', etaMs: a.etaMs,
   })),
+  incomingRefMs,
 );
 refresh(nowMs);
 

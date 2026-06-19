@@ -28,13 +28,13 @@ export interface OverlayHandlers {
 }
 export interface IncomingItem { berthNo: number; name: string; etaMs: number; }
 export interface OverlayApi {
-  setKpi(opts: { inPort: number; occupied: number; total: number; dateMs: number }): void;
+  setKpi(opts: { inPort: number; total: number }): void;
   showVessel(v: VesselRecord): void;
   hideVessel(): void;
   setTimeRange(opts: { minMs: number; maxMs: number; nowMs: number }): void;
   setClock(ms: number): void;
   setTrend(points: number[]): void;
-  setIncoming(items: IncomingItem[]): void;
+  setIncoming(items: IncomingItem[], asOfMs?: number): void;
 }
 
 export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): OverlayApi {
@@ -153,7 +153,8 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
 
   // RIGHT: incoming list
   const incoming = card('lg lg-card', rightRail);
-  incoming.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港(港務預報)</div><div data-rows></div>';
+  incoming.innerHTML = '<div data-inc-head style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">即將進港(港務預報)</div><div data-rows></div>';
+  const incHead = incoming.querySelector('[data-inc-head]') as HTMLElement;
   const incRows = incoming.querySelector('[data-rows]') as HTMLElement;
 
   // RIGHT: detail card (hidden until a ship is picked; stacks below the incoming list)
@@ -279,7 +280,8 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
       chartSvg.setAttribute('data-lg-points', pts.join(','));
       statSpark.setAttribute('data-lg-spark', pts.slice(-12).join(','));
     },
-    setIncoming(items) {
+    setIncoming(items, asOfMs) {
+      if (asOfMs != null) incHead.textContent = `即將進港 · 港務預報基準 ${fmtClock(asOfMs)}`;
       if (!items.length) { incRows.innerHTML = '<div style="opacity:.5;font-size:12px">— 無 —</div>'; return; }
       incRows.innerHTML = items.slice(0, 6).map((it) => `
         <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid rgba(120,140,160,.12)">
