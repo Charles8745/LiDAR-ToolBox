@@ -270,6 +270,7 @@ export class LidarEngine {
       if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((m) => m.dispose());
     }
     this.extraLayers.length = 0;
+    this.updaters.length = 0;
     this.renderer.dispose();
   }
 }

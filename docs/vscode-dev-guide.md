@@ -288,8 +288,8 @@ __twin.labels.update(__twin.engine.camera3D)
 // 釋放 GPU 資源(切換場景時)
 __twin.labels.dispose()
 
-// 三個 billboard Group(可直接操作 .visible / .position 等)
-__twin.labels.group   // Three.js Group,含 district / terminal / berth 子 Group
+// 所有 billboard 標籤的容器(可直接操作 .visible / .position 等)
+__twin.labels.group   // Three.js Group,所有 Text billboard 的 flat 集合(無子 Group);用 setTierVisible() 切換各層
 ```
 
 #### 調校旋鈕(原始碼)
@@ -342,7 +342,7 @@ npm run port:berths   # 抓取 → bbox-filter KHH → 累積 append → data/be
 
 `data/berths-khh.json` 格式:
 ```json
-{ "capturedAtMs": 1750000000000, "berths": [{ "pier": "1234", "lat": 22.59, "lng": 120.30, "spName": "高雄港第1號碼頭" }, ...] }
+{ "capturedAtMs": 1750000000000, "berths": [{ "code": "1001", "lat": 22.61, "lon": 120.27, "angle": 166, "nameZh": "立揚" }, ...] }
 ```
 
 #### 字型子集化

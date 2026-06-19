@@ -1,6 +1,6 @@
 /** One berth's static geometry, parsed from the official KHB GetMarker feed. */
 export interface BerthMarker {
-  code: string;   // official 4-digit pier code, e.g. "1001"
+  code: string;   // official pier code (typically 4 digits, occasionally alphanumeric e.g. 126B)
   lat: number;    // midpoint of the two surveyed berth endpoints (WGS84)
   lon: number;
   angle: number;  // berth orientation in degrees (informational; from ANGLE)

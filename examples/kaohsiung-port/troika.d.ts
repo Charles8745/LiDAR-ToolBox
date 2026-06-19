@@ -7,8 +7,8 @@ declare module 'troika-three-text' {
     font: string | null;
     fontSize: number;
     color: number | string | Color;
-    anchorX: number | 'left' | 'center' | 'right' | string;
-    anchorY: number | 'top' | 'middle' | 'bottom' | string;
+    anchorX: number | 'left' | 'center' | 'right';
+    anchorY: number | 'top' | 'middle' | 'bottom';
     outlineWidth: number | string;
     outlineColor: number | string | Color;
     outlineOpacity: number;
