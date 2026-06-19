@@ -22,6 +22,8 @@ DURATION_HOURS="${DURATION_HOURS:-24}"
 SKIP_PROBE="${SKIP_PROBE:-0}"
 SKIP_EXPORT="${SKIP_EXPORT:-0}"
 BACKGROUND="${BACKGROUND:-0}"
+SKIP_TWPORT="${SKIP_TWPORT:-0}"
+TWPORT_POLL_MIN="${TWPORT_POLL_MIN:-15}"
 
 # repo 根目錄(優先用 git,失敗則由腳本位置往上推三層)
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -36,6 +38,7 @@ VITE_NODE="$ROOT/node_modules/.bin/vite-node"
 REC_TS="$DATA_DIR/record-ais.ts"
 PROBE_TS="$DATA_DIR/probe-ais.ts"
 EXPORT_TS="$DATA_DIR/export-ais-tracks.ts"
+TWPORT_TS="$DATA_DIR/record-twport.ts"
 
 log() { printf '\033[36m[ais-auto]\033[0m %s\n' "$*"; }
 die() { printf '\033[31m[ais-auto] 錯誤:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -84,6 +87,22 @@ DURATION_SECONDS="$(awk "BEGIN{printf \"%d\", $DURATION_HOURS*3600}")"
 [ "$DURATION_SECONDS" -ge 1 ] || die "DURATION_HOURS 太小($DURATION_HOURS),算出 <1 秒。"
 export AIS_POLL_MS="${AIS_POLL_MS:-30000}"
 
+# 並行啟動 TWPort 累積錄製(自我限時同 DURATION),與 AIS 並跑、獨立輸出檔。
+TW_PID=""
+if [ "$SKIP_TWPORT" = "1" ]; then
+  log "SKIP_TWPORT=1 → 不並行錄 TWPort"
+else
+  log "並行啟動 TWPort 錄製:每 ${TWPORT_POLL_MIN}min · 限時同 ${DURATION_HOURS}h"
+  if command -v timeout >/dev/null 2>&1; then
+    TWPORT_POLL_MIN="$TWPORT_POLL_MIN" timeout --signal=TERM --kill-after=20s "${DURATION_SECONDS}s" "$VITE_NODE" "$TWPORT_TS" &
+    TW_PID=$!
+  else
+    TWPORT_POLL_MIN="$TWPORT_POLL_MIN" "$VITE_NODE" "$TWPORT_TS" &
+    TW_PID=$!
+    ( sleep "$DURATION_SECONDS"; kill -TERM "$TW_PID" 2>/dev/null ) &
+  fi
+fi
+
 log "開始錄製:時長 ${DURATION_HOURS}h(${DURATION_SECONDS}s)· 輪詢 ${AIS_POLL_MS}ms"
 log "輸出 raw → $TRACKS_DIR/raw-khh-<UTC日期>.jsonl"
 
@@ -108,6 +127,13 @@ case "$REC_RC" in
   *) log "⚠ 錄製以 rc=$REC_RC 結束 —— 仍嘗試 export 已錄到的資料" ;;
 esac
 
+# AIS 已收尾;等並行的 TWPort 也自我限時結束(原子寫入確保最後一檔完整)。
+if [ -n "${TW_PID:-}" ]; then
+  log "等待 TWPort 錄製收尾…"
+  wait "$TW_PID" 2>/dev/null || true
+  log "TWPort 錄製結束"
+fi
+
 # ── 3) 自動 export → per-MMSI tracks JSON ───────────────────────────────────
 if [ "$SKIP_EXPORT" = "1" ]; then
   log "SKIP_EXPORT=1 → 不轉檔。手動轉:npm run port:ais:export"
@@ -123,3 +149,8 @@ LATEST_JSON="$(ls -t "$TRACKS_DIR"/khh-*.json 2>/dev/null | head -1 || true)"
 log "完成 ✓ 產出:$LATEST_JSON"
 log "大小:$(du -h "$LATEST_JSON" | cut -f1)"
 log "把這個檔 copy 回開發機的 examples/kaohsiung-port/data/ais-tracks/ 即可(只 commit khh-*.json)。"
+LATEST_SNAP="$(ls -t "$DATA_DIR/snapshots"/khh-*.json 2>/dev/null | head -1 || true)"
+if [ -n "$LATEST_SNAP" ]; then
+  log "TWPort snapshot:$LATEST_SNAP($(du -h "$LATEST_SNAP" | cut -f1))"
+  log "提醒:把 ais-tracks/khh-*.json 與 snapshots/khh-*.json 兩個檔一起 copy 回開發機。"
+fi
