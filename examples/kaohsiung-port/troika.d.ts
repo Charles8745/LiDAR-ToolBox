@@ -1,3 +1,5 @@
+declare module '*.woff?url' { const url: string; export default url; }
+
 declare module 'troika-three-text' {
   import { Mesh, Color } from 'three';
   export class Text extends Mesh {

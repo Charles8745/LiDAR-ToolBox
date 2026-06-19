@@ -15,6 +15,11 @@ import type { OsmGeometry } from './data/osm';
 import osmData from './data/osm-khh.json';
 import basemapMeta from './data/basemap-khh.json';
 import basemapUrl from './data/basemap-khh.jpg';
+import { buildLabelLayer } from './scene/textLabels';
+import { PORT_ZONES, DEFAULT_BANDS } from './scene/portZones';
+import type { BerthMarker } from './data/berthGeometry';
+import berthsData from './data/berths-khh.json';
+import labelFontUrl from './data/fonts/zones-subset.woff?url';
 
 interface Snapshot { capturedAtMs: number; berthing: VesselRecord[]; forecast: VesselRecord[]; }
 const snaps = import.meta.glob('./data/snapshots/*.json', { eager: true, import: 'default' });
@@ -206,6 +211,28 @@ function buildBasemapPlane(): THREE.Mesh {
 }
 const mapPlane = buildBasemapPlane();
 engine.addLayer(mapPlane);
+
+// F3: berth/zone labels — real official berth coords + 3-tier distance LOD (troika SDF).
+const berths = (berthsData as { berths: BerthMarker[] }).berths;
+const sceneCenter = proj.toWorld(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon); // {x:0,z:0}
+const labels = buildLabelLayer(PORT_ZONES, berths, {
+  proj,
+  bands: DEFAULT_BANDS,
+  nearRadius: 60 * S,           // berth labels show within ~2.4km of camera
+  yLift: 1.0 * S,               // clear of y=0 structure (ships sit at 0.5*S)
+  fontUrl: labelFontUrl,
+  color: 0xcbd5df,              // war-room silver
+  outlineColor: 0x0b0c0e,       // dark ink outline for legibility
+  sceneCenter: { x: sceneCenter.x, z: sceneCenter.z },
+  fontSizes: { district: 3.0 * S, terminal: 2.2 * S, berth: 1.0 * S },
+});
+engine.addLayer(labels.group);  // NOT in any bloom group → labels don't glow
+engine.addUpdate(() => labels.update(engine.camera3D));
+
+fetch(labelFontUrl, { method: 'HEAD' }).then((r) => {
+  if (!r.ok) { labels.group.visible = false; console.warn('[labels] font load failed; hiding labels'); }
+}).catch(() => { labels.group.visible = false; console.warn('[labels] font fetch error; hiding labels'); });
+
 engine.start();
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
@@ -283,6 +310,7 @@ canvas.addEventListener('click', (e) => {
   engine, shipPC, mapPlane, updateShips, refresh, play, pause,
   fromMs, toMs, nowMs, peakInPort, tracks, trackMeta,
   layers: Object.fromEntries(layerHandles.map((h) => [h.key, h])),
+  labels,
   get shipCenters() { return shipCenters; },
   setBasemapTint: (hex: number) => { (mapPlane.material as THREE.MeshBasicMaterial).color.setHex(hex); },
 };
