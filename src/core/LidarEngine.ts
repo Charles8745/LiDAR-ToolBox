@@ -4,6 +4,7 @@ import { RaycastSampler } from './RaycastSampler';
 import { PointCloud } from './PointCloud';
 import { createSelectiveBloom, BLOOM_LAYER, type SelectiveBloom, type BloomOptions, type BloomGroup } from './postfx';
 import { buildRampTextureFromFn } from '../ramps/lut';
+import { runUpdaters, type UpdateFn } from './updaters';
 import type { Emitter, Scannable, ColorRamp, Persistence, EmitContext } from './types';
 
 export interface LidarEngineOptions {
@@ -49,6 +50,7 @@ export class LidarEngine {
   private bloom: SelectiveBloom | null = null;
   private autoScan: boolean = true;
   private extraLayers: THREE.Object3D[] = [];
+  private updaters: UpdateFn[] = [];
 
   private aim = new THREE.Vector2(0, 0);
   private yaw = 0;
@@ -167,6 +169,7 @@ export class LidarEngine {
       if (mat && mat.uniforms && mat.uniforms.uTime) mat.uniforms.uTime.value = this.time;
     }
     this.controls?.update();
+    this.tick(dt, this.time);
 
     if (this.bloom) this.bloom.render();
     else this.renderer.render(this.scene, this.camera);
@@ -240,6 +243,12 @@ export class LidarEngine {
   get pointCount(): number {
     return this.pointCloud.count;
   }
+
+  /** Register a per-frame callback (dt seconds, absolute time). Runs once per rendered frame. */
+  addUpdate(fn: UpdateFn): void { this.updaters.push(fn); }
+
+  /** Run all registered updaters. Called by the render loop; exposed for headless testing. */
+  tick(dt: number, time: number): void { runUpdaters(this.updaters, dt, time); }
 
   /** The render camera (for app-side world→screen projection / picking). */
   get camera3D(): THREE.PerspectiveCamera { return this.camera; }
