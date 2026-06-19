@@ -17,4 +17,4 @@ export function createProjection(originLat: number, originLon: number, scale = 0
 }
 
 export const KAOHSIUNG_ORIGIN = { lat: 22.59, lon: 120.30 };
-export const WORLD_SCALE = 0.01; // 1 world unit ≈ 100 m
+export const WORLD_SCALE = 0.025; // 1 world unit = 40 m(F1 後:整體尺度放大,場景更開)

@@ -33,6 +33,8 @@ function fit() { canvas.style.width = '100vw'; canvas.style.height = '100vh'; }
 fit();
 
 const proj = createProjection(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon, WORLD_SCALE);
+// 世界單位尺寸的縮放係數(相對原始 0.01 基準)。要整體拉大/縮小尺度,只改 WORLD_SCALE 一個值即可。
+const S = WORLD_SCALE / 0.01;
 const fromMs = tracksFile.meta.fromMs;
 const toMs = tracksFile.meta.toMs;
 // 開場定在「在港船數最多」的時刻:錄製窗頭尾因 AIS 更新節奏較稀疏(各船軌跡起訖不齊),
@@ -76,7 +78,7 @@ function nearestPierHeadingRad(x: number, z: number): number {
 // 不該每幀重算(M1)。靠泊判定:整段軌跡淨位移 < 100m(1 世界單位)。
 interface TrackMeta { category: ShipCategory; vessel: VesselRecord | null; stationary: boolean; pierH: number; }
 const trackMeta = new Map<string, TrackMeta>();
-const STATIONARY_U = 1.0;
+const STATIONARY_U = 100 * WORLD_SCALE; // 淨位移 < 100m 視為靠泊(隨尺度調整)
 for (const t of tracks) {
   const category = categoryForTrack(t, allVessels);
   const vessel = joinTwport(t, allVessels);
@@ -91,14 +93,15 @@ for (const t of tracks) {
 // is reserved for the live data (ships). See palette note below.
 const LAYERS: LayerConfig[] = [
   // Tier: structure (outline) — dim cool greys, barely-there glow (bloom group 3).
-  { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: [72, 92, 108],   pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8, brightness: 0.9 },
-  { key: 'pier',       label: '碼頭',   source: 'piers',      kind: 'line',     color: [96, 118, 134],  pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8 },
-  { key: 'breakwater', label: '防波堤', source: 'breakwater', kind: 'line',     color: [60, 76, 90],    pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,    spacing: 0.8, brightness: 0.85 },
+  { key: 'coastline',  label: '海岸線', source: 'coastline',  kind: 'line',     color: [72, 92, 108],   pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,       spacing: 0.8 * S, brightness: 0.9 },
+  { key: 'pier',       label: '碼頭',   source: 'piers',      kind: 'line',     color: [96, 118, 134],  pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,       spacing: 0.8 * S },
+  { key: 'breakwater', label: '防波堤', source: 'breakwater', kind: 'line',     color: [60, 76, 90],    pointSize: 2, maxPointSize: 3, bloomGroup: 3, baseY: 0,       spacing: 0.8 * S, brightness: 0.85 },
   // Tier: landmarks (3D) — neutral steel grey, distinguished by 3D shape not colour (blue is now
   // a ship colour). Low glow (bloom group 4). Anchorage is structure-tier (bloom group 3).
-  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [118, 128, 142], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    height: 0.3, rings: 6, perRing: 32, brightness: 0.9 },
-  { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'gantry',   color: [138, 150, 166], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,    legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.05 },
-  { key: 'anchorage',  label: '錨地',   source: 'anchorages', kind: 'zone',     color: [78, 92, 108],   pointSize: 3, maxPointSize: 5, bloomGroup: 3, baseY: 0.05, radius: 1.0, ringCount: 48, spacing: 0.5, brightness: 0.7 },
+  // 世界單位尺寸 × S(=WORLD_SCALE/0.01)自動等比;pointSize/rings/perRing/ringCount 不變(像素/計數)。
+  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [118, 128, 142], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,       height: 0.3 * S, rings: 6, perRing: 32, brightness: 0.9 },
+  { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'gantry',   color: [138, 150, 166], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,       legHeight: 0.6 * S, baseW: 0.4 * S, baseD: 0.4 * S, boomLen: 0.5 * S, spacing: 0.05 * S },
+  { key: 'anchorage',  label: '錨地',   source: 'anchorages', kind: 'zone',     color: [78, 92, 108],   pointSize: 3, maxPointSize: 5, bloomGroup: 3, baseY: 0.05 * S, radius: 1.0 * S, ringCount: 48, spacing: 0.5 * S, brightness: 0.7 },
 ];
 const layerHandles = buildLayers(LAYERS, osm, proj);
 
@@ -113,7 +116,9 @@ const shipPC = new PointCloud({
 interface AisCenter { track: AisTrack; vessel: VesselRecord | null; x: number; y: number; z: number; }
 let shipCenters: AisCenter[] = [];
 
-const SHIP_Y = 0.5;
+// 船 footprint 畫成真實 LOA 的此比例 → 相鄰泊位的船之間留白、不糊成一團(去重疊)。直接改這個值。
+const SHIP_FOOTPRINT = 0.6;
+const SHIP_Y = 0.5 * S;
 function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>) {
   const pos: number[] = []; const val: number[] = [];
   const centers: AisCenter[] = [];
@@ -126,15 +131,15 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
     const catIdx = SHIP_CATEGORIES.indexOf(meta.category);
     const c = proj.toWorld(rp.lat, rp.lon);
     const dim = TYPE_DIMS_M[meta.category];
-    const loaU = (t.loaM ?? dim.loa) * WORLD_SCALE;
-    const beamU = (t.beamM ?? dim.beam) * WORLD_SCALE;
+    const loaU = (t.loaM ?? dim.loa) * WORLD_SCALE * SHIP_FOOTPRINT;
+    const beamU = (t.beamM ?? dim.beam) * WORLD_SCALE * SHIP_FOOTPRINT;
     // 朝向:靠泊船對齊最近碼頭線(L2);移動船用 AIS heading/COG 近似(此 feed 無 heading →
     // positionAt 回傳點間方位角)。heading(0=N,順時針)→ footprint headingRad,長軸對齊 (sinθ,-cosθ)。
     let h: number;
     if (meta.stationary) h = meta.pierH;
     else { const theta = rp.headingDeg * Math.PI / 180; h = Math.atan2(-Math.cos(theta), Math.sin(theta)); }
     const v01 = mode === 'type' ? valueFor(catIdx, SHIP_CATEGORY_COLORS.length) : statusVal;
-    const spacing = loaU > 1.5 ? 0.15 : 0.3; // 小船降取樣
+    const spacing = loaU > 1.5 * S ? 0.15 * S : 0.3 * S; // 小船降取樣(隨尺度等比)
     for (const p of sampleShipFootprint(c, loaU, beamU, h, spacing)) { pos.push(p.x, SHIP_Y, p.z); val.push(v01); }
     centers.push({ track: t, vessel: meta.vessel, x: c.x, y: SHIP_Y, z: c.z });
   }
@@ -158,7 +163,7 @@ function frameOf(points: Array<{ x: number; z: number }>) {
   return { cx, cz, radius };
 }
 const { cx, cz, radius } = frameOf(shipCenters.length ? shipCenters : [{ x: 0, z: 0 }]);
-const dist = radius * 1.7 + 30;
+const dist = radius * 1.0 + 15; // 不等比跟拉 → 放大後的世界填滿更多畫面(否則等比抵消)
 
 const engine = new LidarEngine({
   canvas, autoScan: false, cameraMode: 'orbit',
