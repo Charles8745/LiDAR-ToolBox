@@ -268,6 +268,108 @@ F1 用航港局 MPB 公開 AIS(免金鑰)以「錄製→凍結→回放」呈現
 
 **誠實邊界(F1)**:① 回放是真實 AIS 取樣點間線性插值;② 此 feed 有 COG 無 heading → 靠泊船朝向靠碼頭線對齊、移動船用點間方位角;③ 船 footprint 為 60% 示意尺寸(非精確);④ 進港 = TWPort 官方預報(基準時間顯示在標題);⑤ MPB 端點需台灣 IP。
 
+### 4j. F3 碼頭/分區標籤
+
+F3 在場景上疊一層 **troika-three-text SDF billboard** 標籤,按鏡頭距離自動分三層顯示:遠→分區、中→終端機(terminal)、近→碼頭(berth)。以下整理常調旋鈕。
+
+#### Console 即時控制
+
+`__twin.labels` 提供下列把手(須等場景載入後才有效):
+
+```js
+// 切換各層顯示
+__twin.labels.setTierVisible('district', false)   // 關掉分區標籤
+__twin.labels.setTierVisible('terminal', true)    // 開啟終端機標籤
+__twin.labels.setTierVisible('berth', true)       // 開啟碼頭標籤
+
+// 強制刷新(e.g. 改了 camera 想立即更新不透明度)
+__twin.labels.update(__twin.engine.camera3D)
+
+// 釋放 GPU 資源(切換場景時)
+__twin.labels.dispose()
+
+// 三個 billboard Group(可直接操作 .visible / .position 等)
+__twin.labels.group   // Three.js Group,含 district / terminal / berth 子 Group
+```
+
+#### 調校旋鈕(原始碼)
+
+**距離帶(LOD)**:`examples/kaohsiung-port/scene/portZones.ts` 的 `DEFAULT_BANDS`:
+
+```ts
+export const DEFAULT_BANDS: LodBands = {
+  district: [fadeInStart, fullStart, fullEnd, fadeOutEnd],  // 遠鏡頭顯示分區名
+  terminal: [fadeInStart, fullStart, fullEnd, fadeOutEnd],  // 中距離顯示終端機
+  berth:    [fadeInStart, fullStart, fullEnd, fadeOutEnd],  // 近距離顯示碼頭號
+};
+```
+
+四值皆**世界單位**(WORLD_SCALE = 0.025,1 單位 ≈ 40m):
+- `fadeInStart`→`fullStart`:淡入區間(opacity 0→1)
+- `fullStart`→`fullEnd`:全可見
+- `fullEnd`→`fadeOutEnd`:淡出區間(opacity 1→0)
+
+`dist>fadeOutEnd` 時不可見;`dist<fadeInStart` 時也不可見。三層的帶彼此獨立,遠帶負責 district、中帶負責 terminal、近帶負責 berth。
+
+**main.ts 標籤常數**:
+
+| 常數 | 位置 | 說明 |
+|---|---|---|
+| `nearRadius` | `main.ts` 頂部 | 近鏡頭判定半徑(世界單位),影響 berth 帶是否觸發 |
+| `yLift` | `main.ts` 頂部 | 標籤 y 軸偏移(往上抬離地平面,避免被點雲遮擋) |
+| `fontSizes.district` | `main.ts` 頂部 | 分區標籤字級(troika worldUnits) |
+| `fontSizes.terminal` | `main.ts` 頂部 | 終端機標籤字級 |
+| `fontSizes.berth` | `main.ts` 頂部 | 碼頭標籤字級 |
+| `color` | `main.ts` 頂部 | 標籤主色(hex string,如 `'#e0e8ff'`) |
+| `outlineColor` | `main.ts` 頂部 | 描邊色(SDF outline,加強對比;`'#000000'`) |
+
+Console 即時試:
+```js
+// 抬高所有標籤(暫時)
+__twin.labels.group.position.y = 2
+// 臨時改透明度門檻(程式碼層): op > 0.01 的才畫 → 改 > 0 可消除淡入邊緣 1-frame stale
+```
+
+#### 資料更新:`npm run port:berths`
+
+碼頭座標來自 **KHB 官方 GetMarker**(POST `https://sdci.twport.com.tw/khbweb/osmx2.aspx/GetMarker`):
+
+```bash
+npm run port:berths   # 抓取 → bbox-filter KHH → 累積 append → data/berths-khh.json
+```
+
+**重要**:GetMarker 每次只回傳**當前有船佔用**的船席,空泊位不在回傳內 → 資料是「累積式」的。**多跑幾次(港口忙碌不同時段)才能覆蓋更多碼頭**。已預先 bake 了 72 個 KHH 船席(`data/berths-khh.json`)。改了 KHH 地理範圍需同步改 `data/fetch-berths.ts` 的 `KHH_BBOX`。
+
+`data/berths-khh.json` 格式:
+```json
+{ "capturedAtMs": 1750000000000, "berths": [{ "pier": "1234", "lat": 22.59, "lng": 120.30, "spName": "高雄港第1號碼頭" }, ...] }
+```
+
+#### 字型子集化
+
+標籤字型 `examples/kaohsiung-port/data/fonts/zones-subset.woff` 是 **Noto Sans TC** 的子集,限縮到分區名稱字元 + 數字 + `#` 以降低包體。
+
+若改了 `portZones.ts` 的分區/終端機名稱(即 `PORT_ZONES` 常數),需重跑子集化:
+
+```bash
+# 先取得 Noto Sans TC OTF(如從 Google Fonts 下載)
+pyftsubset NotoSansTC-Regular.otf \
+  --text="<這裡貼所有 PORT_ZONES label 字元 + 0123456789#>" \
+  --flavor=woff \
+  --no-hinting \
+  --output-file=examples/kaohsiung-port/data/fonts/zones-subset.woff
+```
+
+缺字會顯示 tofu(□),是「字型子集不含該字」的訊號 → 更新子集即可。
+
+#### 誠實邊界(F3)
+
+- GetMarker 僅回傳**有船佔用的船席**,空泊位沒座標 → berth 層覆蓋率受佔用狀況而定(72/已知 ~121)。
+- LOD 距離度量目前是**相機到場景原點的 3D 距離**(含高度):若使用者拉高仰角,altitude 分量會影響距離計算、可能提早觸發 tier 切換 → 必要時切換為 XZ 平面距離(詳見 Task 9 後續)。
+- `ANGLE`(船席方位角)已從 GetMarker 取得但 v1 未使用(billboard 朝相機,非朝船席朝向)。
+
+---
+
 ## 5. `__twin` 除錯把手(Console)
 
 `main.ts` 把這些掛在 `window.__twin`(+ `overlay.ts` 掛 `window.__reviveGlass`):
@@ -277,6 +379,7 @@ F1 用航港局 MPB 公開 AIS(免金鑰)以「錄製→凍結→回放」呈現
 | `__twin.engine` | `LidarEngine`(`.scene` / `.camera3D` / `.renderer`) |
 | `__twin.shipPC` | 船層 `PointCloud`(`.setPulseHz`、`.points.material.uniforms`…) |
 | `__twin.layers.<key>` | 六個靜態圖層的 handle(coastline/pier/breakwater/tank/crane/anchorage);`.setVisible/.setColor/.setBrightness/.setSize/.setPulseHz` |
+| `__twin.labels` | F3 碼頭/分區標籤 handle;`.setTierVisible('district'|'terminal'|'berth', on)` / `.update(camera)` / `.dispose()` / `.group`(Three.js Group) |
 | `__twin.mapPlane` | 航照底圖 mesh(`.visible` / `.material.opacity`) |
 | `__twin.setBasemapTint(0x……)` | 即時改底圖染色 |
 | `__twin.updateShips(tMs, mode, enabled?)` | 重建船層(某時刻、type/status、篩選集) |
