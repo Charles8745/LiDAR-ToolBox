@@ -15,7 +15,8 @@
     "port:ais:probe": "vite-node examples/kaohsiung-port/data/probe-ais.ts",
     "port:ais:export": "vite-node examples/kaohsiung-port/data/export-ais-tracks.ts",
     "port:ais:record": "vite-node examples/kaohsiung-port/data/record-ais.ts",
-    "port:ais:auto": "bash examples/kaohsiung-port/data/run-ais-record.sh"
+    "port:ais:auto": "bash examples/kaohsiung-port/data/run-ais-record.sh",
+    "port:twport:record": "vite-node examples/kaohsiung-port/data/record-twport.ts"
   },
   "dependencies": {
     "three": "^0.171.0",
