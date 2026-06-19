@@ -15,6 +15,8 @@
 #   SKIP_PROBE=1    跳過開頭的端點健康檢查
 #   SKIP_EXPORT=1   只錄製、不自動 export
 #   BACKGROUND=1    用 nohup/setsid 背景執行並寫 log
+#   TWPORT_POLL_MIN TWPort 並行錄製輪詢間隔(分鐘)     預設 15
+#   SKIP_TWPORT=1   不並行錄 TWPort 指泊/預報名單
 
 set -euo pipefail
 
