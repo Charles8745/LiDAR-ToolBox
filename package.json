@@ -16,7 +16,8 @@
     "port:ais:export": "vite-node examples/kaohsiung-port/data/export-ais-tracks.ts",
     "port:ais:record": "vite-node examples/kaohsiung-port/data/record-ais.ts",
     "port:ais:auto": "bash examples/kaohsiung-port/data/run-ais-record.sh",
-    "port:twport:record": "vite-node examples/kaohsiung-port/data/record-twport.ts"
+    "port:twport:record": "vite-node examples/kaohsiung-port/data/record-twport.ts",
+    "port:berths": "vite-node examples/kaohsiung-port/data/fetch-berths.ts"
   },
   "dependencies": {
     "three": "^0.171.0",
@@ -26,6 +27,7 @@
     "@types/node": "^25.9.3",
     "@types/three": "^0.171.0",
     "sharp": "^0.35.1",
+    "troika-three-text": "^0.52.4",
     "typescript": "^5.6.0",
     "vite": "^6.0.0",
     "vite-node": "^2.1.0",

@@ -4,6 +4,7 @@ import { RaycastSampler } from './RaycastSampler';
 import { PointCloud } from './PointCloud';
 import { createSelectiveBloom, BLOOM_LAYER, type SelectiveBloom, type BloomOptions, type BloomGroup } from './postfx';
 import { buildRampTextureFromFn } from '../ramps/lut';
+import { runUpdaters, type UpdateFn } from './updaters';
 import type { Emitter, Scannable, ColorRamp, Persistence, EmitContext } from './types';
 
 export interface LidarEngineOptions {
@@ -23,6 +24,9 @@ export interface LidarEngineOptions {
   cameraPosition?: [number, number, number];
   cameraTarget?: [number, number, number];
   cameraFar?: number;
+  /** Orbit dolly clamps (world units). Prevents zooming onto the pivot (feels "stuck") or out to nothing. */
+  cameraMinDistance?: number;
+  cameraMaxDistance?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
   /** Single group on BLOOM_LAYER, or an array of independently-tuned groups (each with its own `layer`). */
@@ -49,6 +53,7 @@ export class LidarEngine {
   private bloom: SelectiveBloom | null = null;
   private autoScan: boolean = true;
   private extraLayers: THREE.Object3D[] = [];
+  private updaters: UpdateFn[] = [];
 
   private aim = new THREE.Vector2(0, 0);
   private yaw = 0;
@@ -97,6 +102,8 @@ export class LidarEngine {
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.target.set(...(opts.cameraTarget ?? ([0, 0, 0] as [number, number, number])));
       this.controls.enableDamping = true;
+      if (opts.cameraMinDistance !== undefined) this.controls.minDistance = opts.cameraMinDistance;
+      if (opts.cameraMaxDistance !== undefined) this.controls.maxDistance = opts.cameraMaxDistance;
       this.controls.update();
     } else {
       this.camera.position.set(0, 0, 0);
@@ -167,6 +174,7 @@ export class LidarEngine {
       if (mat && mat.uniforms && mat.uniforms.uTime) mat.uniforms.uTime.value = this.time;
     }
     this.controls?.update();
+    this.tick(dt, this.time);
 
     if (this.bloom) this.bloom.render();
     else this.renderer.render(this.scene, this.camera);
@@ -241,6 +249,12 @@ export class LidarEngine {
     return this.pointCloud.count;
   }
 
+  /** Register a per-frame callback (dt seconds, absolute time). Runs once per rendered frame. */
+  addUpdate(fn: UpdateFn): void { this.updaters.push(fn); }
+
+  /** Run all registered updaters. Called by the render loop; exposed for headless testing. */
+  tick(dt: number, time: number): void { runUpdaters(this.updaters, dt, time); }
+
   /** The render camera (for app-side world→screen projection / picking). */
   get camera3D(): THREE.PerspectiveCamera { return this.camera; }
 
@@ -261,6 +275,7 @@ export class LidarEngine {
       if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((m) => m.dispose());
     }
     this.extraLayers.length = 0;
+    this.updaters.length = 0;
     this.renderer.dispose();
   }
 }

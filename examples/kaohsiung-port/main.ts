@@ -15,6 +15,11 @@ import type { OsmGeometry } from './data/osm';
 import osmData from './data/osm-khh.json';
 import basemapMeta from './data/basemap-khh.json';
 import basemapUrl from './data/basemap-khh.jpg';
+import { buildLabelLayer } from './scene/textLabels';
+import { DEFAULT_BANDS } from './scene/portZones';
+import { shortBerthLabel, type BerthMarker } from './data/berthGeometry';
+import berthsData from './data/berths-khh.json';
+import labelFontUrl from './data/fonts/zones-subset.woff?url';
 
 interface Snapshot { capturedAtMs: number; berthing: VesselRecord[]; forecast: VesselRecord[]; }
 const snaps = import.meta.glob('./data/snapshots/*.json', { eager: true, import: 'default' });
@@ -173,6 +178,8 @@ const engine = new LidarEngine({
   cameraPosition: [cx, dist * 0.85, cz + dist * 0.75],
   cameraTarget: [cx, 0, cz],
   cameraFar: dist * 6,
+  cameraMinDistance: 10,        // 別 dolly 到 pivot 上(會卡住、難轉);留 ~400m 仍可貼近看碼頭碼
+  cameraMaxDistance: dist * 3,  // 別縮太遠變一點
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
   // Glow follows the visual hierarchy: ships(data) > landmarks > structure.
   bloom: [
@@ -206,6 +213,34 @@ function buildBasemapPlane(): THREE.Mesh {
 }
 const mapPlane = buildBasemapPlane();
 engine.addLayer(mapPlane);
+
+// F3: berth-number labels — real official berth coords (troika SDF), berth tier only.
+// Display the colloquial berth number (strip the 1xxx series prefix).
+const berths = (berthsData as { berths: BerthMarker[] }).berths.map(
+  (b) => ({ ...b, code: shortBerthLabel(b.code) }),
+);
+const sceneCenter = proj.toWorld(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon); // {x:0,z:0}
+// Only the individual berth numbers (zone-name tiers dropped per UX). Berth tier is
+// always full opacity; visibility is purely a per-label proximity reveal (nearRadius) —
+// zoom toward an area and its berth numbers fade in, far areas stay clean.
+const labels = buildLabelLayer([], berths, {
+  proj,
+  bands: { ...DEFAULT_BANDS, berth: [0, 0, 1e9, 1e9] },
+  nearRadius: 28 * S,           // berths show within ~2.8km of the camera (proximity reveal; tune to taste)
+  yLift: 1.0 * S,               // clear of y=0 structure (ships sit at 0.5*S)
+  fontUrl: labelFontUrl,
+  color: 0xcbd5df,              // war-room silver
+  outlineColor: 0x0b0c0e,       // dark ink outline for legibility
+  sceneCenter: { x: sceneCenter.x, z: sceneCenter.z },
+  fontSizes: { district: 1.7 * S, terminal: 1.2 * S, berth: 0.6 * S },
+});
+engine.addLayer(labels.group);  // NOT in any bloom group → labels don't glow
+engine.addUpdate(() => labels.update(engine.camera3D));
+
+fetch(labelFontUrl, { method: 'HEAD' }).then((r) => {
+  if (!r.ok) { labels.group.visible = false; console.warn('[labels] font load failed; hiding labels'); }
+}).catch(() => { labels.group.visible = false; console.warn('[labels] font fetch error; hiding labels'); });
+
 engine.start();
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
@@ -283,6 +318,7 @@ canvas.addEventListener('click', (e) => {
   engine, shipPC, mapPlane, updateShips, refresh, play, pause,
   fromMs, toMs, nowMs, peakInPort, tracks, trackMeta,
   layers: Object.fromEntries(layerHandles.map((h) => [h.key, h])),
+  labels,
   get shipCenters() { return shipCenters; },
   setBasemapTint: (hex: number) => { (mapPlane.material as THREE.MeshBasicMaterial).color.setHex(hex); },
 };
