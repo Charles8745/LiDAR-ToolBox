@@ -54,6 +54,6 @@ const berths = [...union.values()].sort((a, b) => a.code.localeCompare(b.code));
 
 mkdirSync(here, { recursive: true });
 const tmp = `${outPath}.tmp`;
-writeFileSync(tmp, JSON.stringify({ capturedAtMs, berths }, null, 2));
+writeFileSync(tmp, JSON.stringify({ capturedAtMs, berths }, null, 2) + '\n');
 renameSync(tmp, outPath);
 console.log(`wrote ${outPath}: +${fresh.length} this run, ${berths.length} total distinct berths`);
