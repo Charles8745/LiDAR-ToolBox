@@ -347,16 +347,18 @@ npm run port:berths   # 抓取 → bbox-filter KHH → 累積 append → data/be
 
 #### 字型子集化
 
-標籤字型 `examples/kaohsiung-port/data/fonts/zones-subset.woff` 是 **Noto Sans TC** 的子集,限縮到分區名稱字元 + 數字 + `#` 以降低包體。
+標籤字型 `examples/kaohsiung-port/data/fonts/zones-subset.woff` 是 **Noto Sans TC** 的子集,限縮到分區名稱字元 + `0-9` + `#` + **`A-Z`**(碼頭碼可能含字母,如 `26B`;少了字母會在畫面顯示 tofu □)以降低包體。
 
-若改了 `portZones.ts` 的分區/終端機名稱(即 `PORT_ZONES` 常數),需重跑子集化:
+**標籤文字格式**:terminal(貨櫃中心)層顯示**純數字 1–7**(+ `洲際`/`海事`),非「第N貨櫃中心」;個別碼頭層用 `shortBerthLabel()` 去掉 `1` 系列前綴顯示俗稱碼頭號(`1066`→`66`、`1201`→`201`、`126B`→`26B`;`0003`/`4021`/`4049` 維持原碼避免碰撞)。district 仍用完整商港區名。
+
+若改了 `portZones.ts` 的 `PORT_ZONES` label 文字,需重跑子集化(charset 需涵蓋所有 label 字元 + `0123456789#` + `A-Z`):
 
 ```bash
 # 先取得 Noto Sans TC OTF(如從 Google Fonts 下載)
 pyftsubset NotoSansTC-Regular.otf \
-  --text="<這裡貼所有 PORT_ZONES label 字元 + 0123456789#>" \
+  --text="<所有 PORT_ZONES label 字元 + 0123456789# + ABCDEFGHIJKLMNOPQRSTUVWXYZ>" \
   --flavor=woff \
-  --no-hinting \
+  --no-hinting --desubroutinize \
   --output-file=examples/kaohsiung-port/data/fonts/zones-subset.woff
 ```
 
