@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path';
 import { fetchTwportSnapshot } from './twport-fetch';
 import { upsertVessels, buildUnionSnapshot, type VesselRecord, type TwportSnapshot } from './twport';
 
-const POLL_MS = Number(process.env.TWPORT_POLL_MIN ?? 15) * 60_000;
+// 防呆:非數字/<=0 的 TWPORT_POLL_MIN 退回預設 15min(避免 NaN → setTimeout 立即觸發熱迴圈)。
+const pollMin = Number(process.env.TWPORT_POLL_MIN);
+const POLL_MS = (Number.isFinite(pollMin) && pollMin > 0 ? pollMin : 15) * 60_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = resolve(here, 'snapshots');

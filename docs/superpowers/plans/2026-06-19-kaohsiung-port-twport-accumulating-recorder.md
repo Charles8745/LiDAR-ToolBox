@@ -397,7 +397,7 @@ Run the TWPort recorder in parallel with AIS recording under the same duration, 
 - Consumes: `record-twport.ts` (Task 3), the existing AIS record/export flow.
 - Produces: `npm run port:ais:auto` now also produces an accumulated `snapshots/khh-<date>.json`. New knobs: `TWPORT_POLL_MIN` (default 15), `SKIP_TWPORT` (default 0).
 
-- [ ] **Step 1: Add the two new knobs**
+- [x] **Step 1: Add the two new knobs**
 
 In `run-ais-record.sh`, in the knob block near the top (right after the `BACKGROUND="${BACKGROUND:-0}"` line), add:
 
@@ -406,7 +406,7 @@ SKIP_TWPORT="${SKIP_TWPORT:-0}"
 TWPORT_POLL_MIN="${TWPORT_POLL_MIN:-15}"
 ```
 
-- [ ] **Step 2: Declare the recorder path**
+- [x] **Step 2: Declare the recorder path**
 
 In the path block (where `REC_TS`, `EXPORT_TS` etc. are defined), add:
 
@@ -414,7 +414,7 @@ In the path block (where `REC_TS`, `EXPORT_TS` etc. are defined), add:
 TWPORT_TS="$DATA_DIR/record-twport.ts"
 ```
 
-- [ ] **Step 3: Launch TWPort in parallel before the AIS foreground record**
+- [x] **Step 3: Launch TWPort in parallel before the AIS foreground record**
 
 Locate the line `log "開始錄製:時長 ${DURATION_HOURS}h..."` (the AIS record section, just after `export AIS_POLL_MS=...`). Immediately BEFORE that `log` line, insert:
 
@@ -436,7 +436,7 @@ else
 fi
 ```
 
-- [ ] **Step 4: Wait for TWPort to finish after AIS recording**
+- [x] **Step 4: Wait for TWPort to finish after AIS recording**
 
 Locate the AIS record-result `case "$REC_RC" in ... esac` block. Immediately AFTER that `esac`, insert:
 
@@ -449,7 +449,7 @@ if [ -n "${TW_PID:-}" ]; then
 fi
 ```
 
-- [ ] **Step 5: Report the TWPort snapshot at the end**
+- [x] **Step 5: Report the TWPort snapshot at the end**
 
 At the very end of the file, after the final `log "把這個檔 copy 回開發機..."` line, append:
 
@@ -461,12 +461,12 @@ if [ -n "$LATEST_SNAP" ]; then
 fi
 ```
 
-- [ ] **Step 6: Syntax check**
+- [x] **Step 6: Syntax check**
 
 Run: `bash -n examples/kaohsiung-port/data/run-ais-record.sh`
 Expected: no output (syntax OK).
 
-- [ ] **Step 7: (Optional, needs Taiwan IP) end-to-end smoke + cleanup**
+- [x] **Step 7: (Optional, needs Taiwan IP) end-to-end smoke + cleanup**
 
 Run a ~40s full auto run that exercises both recorders without polluting tracked fixtures:
 Run: `SKIP_PROBE=1 DURATION_HOURS=0.011 npm run port:ais:auto`
@@ -476,17 +476,17 @@ Run: `node -e "const s=require('./examples/kaohsiung-port/data/snapshots/khh-<to
 Run: `rm -f examples/kaohsiung-port/data/snapshots/khh-<today>.json examples/kaohsiung-port/data/ais-tracks/raw-khh-<today>.jsonl examples/kaohsiung-port/data/ais-tracks/khh-<today>.json`
 If no Taiwan IP, skip this step — Step 6 covers syntax and the recorder was proven in Task 3.
 
-- [ ] **Step 8: Full quality gate**
+- [x] **Step 8: Full quality gate**
 
 Run: `npm test && npx tsc --noEmit -p tsconfig.json && npm run build`
 Expected: all tests green (including the new aggregate tests), tsc 0 errors, build succeeds.
 
-- [ ] **Step 9: Confirm working tree has no stray data artifacts**
+- [x] **Step 9: Confirm working tree has no stray data artifacts**
 
 Run: `git status --short`
 Expected: only `M examples/kaohsiung-port/data/run-ais-record.sh` staged-or-modified; NO `khh-2026-06-*.json` changes under `snapshots/` other than the committed fixture, and no `raw-khh-*.jsonl` (gitignored). If a dated artifact appears, remove it (never the committed `khh-2026-06-14.json`).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add examples/kaohsiung-port/data/run-ais-record.sh
