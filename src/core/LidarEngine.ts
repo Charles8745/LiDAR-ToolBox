@@ -24,6 +24,9 @@ export interface LidarEngineOptions {
   cameraPosition?: [number, number, number];
   cameraTarget?: [number, number, number];
   cameraFar?: number;
+  /** Orbit dolly clamps (world units). Prevents zooming onto the pivot (feels "stuck") or out to nothing. */
+  cameraMinDistance?: number;
+  cameraMaxDistance?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
   /** Single group on BLOOM_LAYER, or an array of independently-tuned groups (each with its own `layer`). */
@@ -99,6 +102,8 @@ export class LidarEngine {
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.target.set(...(opts.cameraTarget ?? ([0, 0, 0] as [number, number, number])));
       this.controls.enableDamping = true;
+      if (opts.cameraMinDistance !== undefined) this.controls.minDistance = opts.cameraMinDistance;
+      if (opts.cameraMaxDistance !== undefined) this.controls.maxDistance = opts.cameraMaxDistance;
       this.controls.update();
     } else {
       this.camera.position.set(0, 0, 0);
