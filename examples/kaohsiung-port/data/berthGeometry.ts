@@ -54,3 +54,17 @@ export function filterToBbox(markers: BerthMarker[], bbox: Bbox): BerthMarker[] 
     (m) => m.lat >= bbox.s && m.lat <= bbox.n && m.lon >= bbox.w && m.lon <= bbox.e,
   );
 }
+
+/**
+ * Display form of a berth code: strip the leading "1" series prefix (and any leading
+ * zeros) from the main 4-char 1xxx codes so labels read as the colloquial berth number
+ * ("1066"→"66", "1201"→"201", "126B"→"26B", "1001"→"1"). Other series (0003, 4021, …)
+ * are kept verbatim to avoid collisions (e.g. 1021→"21" vs 4021 kept as "4021").
+ */
+export function shortBerthLabel(code: string): string {
+  if (code.length === 4 && code[0] === '1') {
+    const r = code.slice(1).replace(/^0+/, '');
+    return r === '' ? '0' : r;
+  }
+  return code;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGetMarker, upsertBerths, filterToBbox, type BerthMarker, type Bbox } from '../examples/kaohsiung-port/data/berthGeometry';
+import { parseGetMarker, upsertBerths, filterToBbox, shortBerthLabel, type BerthMarker, type Bbox } from '../examples/kaohsiung-port/data/berthGeometry';
 
 // 取自實測 GetMarker 的精簡 fixture(d.v 數筆)。
 const RAW = {
@@ -69,5 +69,20 @@ describe('filterToBbox', () => {
     const result = filterToBbox([inside, outside], KHH_BBOX);
     expect(result).toHaveLength(1);
     expect(result[0].code).toBe('1001');
+  });
+});
+
+describe('shortBerthLabel', () => {
+  it('strips the leading 1 series prefix and leading zeros from 1xxx codes', () => {
+    expect(shortBerthLabel('1001')).toBe('1');
+    expect(shortBerthLabel('1066')).toBe('66');
+    expect(shortBerthLabel('1201')).toBe('201');
+    expect(shortBerthLabel('1219')).toBe('219');
+    expect(shortBerthLabel('126B')).toBe('26B');
+  });
+  it('keeps other series verbatim to avoid collisions', () => {
+    expect(shortBerthLabel('0003')).toBe('0003');
+    expect(shortBerthLabel('4021')).toBe('4021'); // would collide with 1021→"21" if stripped
+    expect(shortBerthLabel('4049')).toBe('4049');
   });
 });

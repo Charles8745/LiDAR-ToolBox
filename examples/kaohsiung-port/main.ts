@@ -17,7 +17,7 @@ import basemapMeta from './data/basemap-khh.json';
 import basemapUrl from './data/basemap-khh.jpg';
 import { buildLabelLayer } from './scene/textLabels';
 import { PORT_ZONES, DEFAULT_BANDS } from './scene/portZones';
-import type { BerthMarker } from './data/berthGeometry';
+import { shortBerthLabel, type BerthMarker } from './data/berthGeometry';
 import berthsData from './data/berths-khh.json';
 import labelFontUrl from './data/fonts/zones-subset.woff?url';
 
@@ -213,7 +213,10 @@ const mapPlane = buildBasemapPlane();
 engine.addLayer(mapPlane);
 
 // F3: berth/zone labels — real official berth coords + 3-tier distance LOD (troika SDF).
-const berths = (berthsData as { berths: BerthMarker[] }).berths;
+// Display the colloquial berth number (strip the 1xxx series prefix) for a cleaner near tier.
+const berths = (berthsData as { berths: BerthMarker[] }).berths.map(
+  (b) => ({ ...b, code: shortBerthLabel(b.code) }),
+);
 const sceneCenter = proj.toWorld(KAOHSIUNG_ORIGIN.lat, KAOHSIUNG_ORIGIN.lon); // {x:0,z:0}
 const labels = buildLabelLayer(PORT_ZONES, berths, {
   proj,
@@ -224,7 +227,7 @@ const labels = buildLabelLayer(PORT_ZONES, berths, {
   color: 0xcbd5df,              // war-room silver
   outlineColor: 0x0b0c0e,       // dark ink outline for legibility
   sceneCenter: { x: sceneCenter.x, z: sceneCenter.z },
-  fontSizes: { district: 1.4 * S, terminal: 1.0 * S, berth: 0.55 * S },
+  fontSizes: { district: 1.7 * S, terminal: 1.2 * S, berth: 0.55 * S },
 });
 engine.addLayer(labels.group);  // NOT in any bloom group → labels don't glow
 engine.addUpdate(() => labels.update(engine.camera3D));

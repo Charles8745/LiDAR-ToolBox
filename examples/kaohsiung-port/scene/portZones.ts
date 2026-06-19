@@ -8,22 +8,23 @@ export interface PortZone { label: string; lat: number; lon: number; tier: ZoneT
  * commercial berths (where 蓬萊/鹽埕/苓雅/中島 actually are); terminals = centroids of
  * 9 lat-bands over the central-south berths (container centres + 洲際 + 海事). These are
  * COARSE area headers (non-survey-grade); the individual berth tier carries real precision.
- * North→south.
+ * Terminal labels use bare numbers (1–7 = 第一~第七貨櫃中心) for a clean, low-clutter
+ * mid tier; 洲際二期/海事工作船渠 keep short names. North→south.
  */
 export const PORT_ZONES: PortZone[] = [
   { label: '蓬萊商港區', tier: 'district', lat: 22.6161, lon: 120.2841 },
   { label: '鹽埕商港區', tier: 'district', lat: 22.6094, lon: 120.2895 },
   { label: '苓雅商港區', tier: 'district', lat: 22.6027, lon: 120.2897 },
   { label: '中島商港區', tier: 'district', lat: 22.5955, lon: 120.2929 },
-  { label: '第一貨櫃中心', tier: 'terminal', lat: 22.6027, lon: 120.2907 },
-  { label: '第二貨櫃中心', tier: 'terminal', lat: 22.5983, lon: 120.2910 },
-  { label: '第三貨櫃中心', tier: 'terminal', lat: 22.5930, lon: 120.2934 },
-  { label: '第四貨櫃中心', tier: 'terminal', lat: 22.5851, lon: 120.2981 },
-  { label: '第五貨櫃中心', tier: 'terminal', lat: 22.5687, lon: 120.3073 },
-  { label: '第六貨櫃中心', tier: 'terminal', lat: 22.5593, lon: 120.3212 },
-  { label: '第七貨櫃中心', tier: 'terminal', lat: 22.5521, lon: 120.3236 },
-  { label: '洲際二期', tier: 'terminal', lat: 22.5423, lon: 120.3247 },
-  { label: '海事工作船渠', tier: 'terminal', lat: 22.5340, lon: 120.3115 },
+  { label: '1', tier: 'terminal', lat: 22.6027, lon: 120.2907 },
+  { label: '2', tier: 'terminal', lat: 22.5983, lon: 120.2910 },
+  { label: '3', tier: 'terminal', lat: 22.5930, lon: 120.2934 },
+  { label: '4', tier: 'terminal', lat: 22.5851, lon: 120.2981 },
+  { label: '5', tier: 'terminal', lat: 22.5687, lon: 120.3073 },
+  { label: '6', tier: 'terminal', lat: 22.5593, lon: 120.3212 },
+  { label: '7', tier: 'terminal', lat: 22.5521, lon: 120.3236 },
+  { label: '洲際', tier: 'terminal', lat: 22.5423, lon: 120.3247 },
+  { label: '海事', tier: 'terminal', lat: 22.5340, lon: 120.3115 },
 ];
 
 /** [fadeInStart, fullStart, fullEnd, fadeOutEnd] in world units (camera→sceneCenter distance). */
