@@ -224,7 +224,7 @@ const labels = buildLabelLayer(PORT_ZONES, berths, {
   color: 0xcbd5df,              // war-room silver
   outlineColor: 0x0b0c0e,       // dark ink outline for legibility
   sceneCenter: { x: sceneCenter.x, z: sceneCenter.z },
-  fontSizes: { district: 3.0 * S, terminal: 2.2 * S, berth: 1.0 * S },
+  fontSizes: { district: 1.4 * S, terminal: 1.0 * S, berth: 0.55 * S },
 });
 engine.addLayer(labels.group);  // NOT in any bloom group → labels don't glow
 engine.addUpdate(() => labels.update(engine.camera3D));
