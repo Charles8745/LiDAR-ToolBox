@@ -70,3 +70,34 @@ export function parseTwportXml(xml: string, source: 'berthing' | 'forecast'): Ve
   }
   return out;
 }
+
+/** Snapshot shape consumed by main.ts (structurally compatible with its local interface). */
+export interface TwportSnapshot {
+  capturedAtMs: number;
+  berthing: VesselRecord[];
+  forecast: VesselRecord[];
+}
+
+/** Identity key for de-duplicating a vessel across polls. Null if unidentifiable. */
+export function unionKey(v: VesselRecord): string | null {
+  const k =
+    v.visaNo.trim() || v.imo.trim() || v.callSign.trim() || v.nameEn.trim() || v.nameZh.trim();
+  return k || null;
+}
+
+/** Upsert records into the union map keyed by unionKey (latest-wins). Unidentifiable records are skipped. */
+export function upsertVessels(map: Map<string, VesselRecord>, records: VesselRecord[]): void {
+  for (const r of records) {
+    const k = unionKey(r);
+    if (k) map.set(k, r);
+  }
+}
+
+/** Build a snapshot from the accumulated union map plus the most recent forecast poll. */
+export function buildUnionSnapshot(
+  map: Map<string, VesselRecord>,
+  lastForecast: VesselRecord[],
+  capturedAtMs: number,
+): TwportSnapshot {
+  return { capturedAtMs, berthing: [...map.values()], forecast: lastForecast };
+}
