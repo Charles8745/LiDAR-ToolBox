@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGetMarker, upsertBerths, type BerthMarker } from '../examples/kaohsiung-port/data/berthGeometry';
+import { parseGetMarker, upsertBerths, filterToBbox, type BerthMarker, type Bbox } from '../examples/kaohsiung-port/data/berthGeometry';
 
 // 取自實測 GetMarker 的精簡 fixture(d.v 數筆)。
 const RAW = {
@@ -41,5 +41,33 @@ describe('upsertBerths', () => {
     expect(map.size).toBe(2);
     expect(map.get('A')!.nameZh).toBe('new');
     expect(map.get('A')!.lat).toBe(2);
+  });
+});
+
+const KHH_BBOX: Bbox = { n: 22.644432, s: 22.522706, w: 120.234375, e: 120.344238 };
+
+describe('filterToBbox', () => {
+  const inside: BerthMarker = { code: '1001', lat: 22.6187, lon: 120.2750, angle: 166, nameZh: '澎湖' };
+  const outside: BerthMarker = { code: '9999', lat: 11.3, lon: 60.1, angle: 0, nameZh: 'bad' };
+
+  it('keeps a marker inside the KHH bbox', () => {
+    const result = filterToBbox([inside], KHH_BBOX);
+    expect(result).toHaveLength(1);
+    expect(result[0].code).toBe('1001');
+  });
+
+  it('drops a marker outside the KHH bbox (lat≈11.3, lon≈60.1 — Indian Ocean)', () => {
+    const result = filterToBbox([outside], KHH_BBOX);
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(filterToBbox([], KHH_BBOX)).toHaveLength(0);
+  });
+
+  it('filters mixed input correctly', () => {
+    const result = filterToBbox([inside, outside], KHH_BBOX);
+    expect(result).toHaveLength(1);
+    expect(result[0].code).toBe('1001');
   });
 });

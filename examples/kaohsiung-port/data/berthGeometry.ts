@@ -45,3 +45,12 @@ export function parseGetMarker(raw: { v?: unknown[] }): BerthMarker[] {
 export function upsertBerths(map: Map<string, BerthMarker>, markers: BerthMarker[]): void {
   for (const m of markers) map.set(m.code, m);
 }
+
+export interface Bbox { n: number; s: number; w: number; e: number }
+
+/** Keep only markers whose lat/lon fall within the bbox (inclusive). */
+export function filterToBbox(markers: BerthMarker[], bbox: Bbox): BerthMarker[] {
+  return markers.filter(
+    (m) => m.lat >= bbox.s && m.lat <= bbox.n && m.lon >= bbox.w && m.lon <= bbox.e,
+  );
+}
