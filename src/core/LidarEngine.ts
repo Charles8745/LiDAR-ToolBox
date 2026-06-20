@@ -27,9 +27,9 @@ export interface LidarEngineOptions {
   /** Orbit dolly clamps (world units). Prevents zooming onto the pivot (feels "stuck") or out to nothing. */
   cameraMinDistance?: number;
   cameraMaxDistance?: number;
-  /** Enable arrow-key panning of the orbit camera (OrbitControls built-in, listens on window). */
+  /** Enable arrow-key panning of the orbit camera (continuous, ground-plane; listens on window). */
   keyboardPan?: boolean;
-  /** Pan distance per arrow keypress in pixels (OrbitControls keyPanSpeed; default 7). */
+  /** Ground-plane pan speed factor (fraction of target-distance per second; default 0.8). */
   keyPanSpeed?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
@@ -74,6 +74,16 @@ export class LidarEngine {
   private right = new THREE.Vector3();
   private upVec = new THREE.Vector3();
 
+  // keyboard pan (continuous, ground-plane) — held arrow keys glide the orbit rig
+  private panKeys = new Set<string>();
+  private onPanKeyDown?: (e: KeyboardEvent) => void;
+  private onPanKeyUp?: (e: KeyboardEvent) => void;
+  private keyPanSpeed = 0.8;
+  private panFwd = new THREE.Vector3();
+  private panRight = new THREE.Vector3();
+  private panDelta = new THREE.Vector3();
+  private worldUp = new THREE.Vector3(0, 1, 0);
+
   constructor(opts: LidarEngineOptions) {
     this.renderer = new THREE.WebGLRenderer({ canvas: opts.canvas, antialias: true });
     this.renderer.setClearColor(0x05060a, 1);
@@ -109,8 +119,14 @@ export class LidarEngine {
       if (opts.cameraMinDistance !== undefined) this.controls.minDistance = opts.cameraMinDistance;
       if (opts.cameraMaxDistance !== undefined) this.controls.maxDistance = opts.cameraMaxDistance;
       if (opts.keyboardPan) {
-        this.controls.listenToKeyEvents(window);
-        if (opts.keyPanSpeed !== undefined) this.controls.keyPanSpeed = opts.keyPanSpeed;
+        this.keyPanSpeed = opts.keyPanSpeed ?? 0.8;
+        const codes = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+        this.onPanKeyDown = (e: KeyboardEvent) => {
+          if (codes.has(e.code)) { this.panKeys.add(e.code); e.preventDefault(); }
+        };
+        this.onPanKeyUp = (e: KeyboardEvent) => { this.panKeys.delete(e.code); };
+        window.addEventListener('keydown', this.onPanKeyDown);
+        window.addEventListener('keyup', this.onPanKeyUp);
       }
       this.controls.update();
     } else {
@@ -181,6 +197,7 @@ export class LidarEngine {
       const mat = (layer as THREE.Points).material as THREE.ShaderMaterial | undefined;
       if (mat && mat.uniforms && mat.uniforms.uTime) mat.uniforms.uTime.value = this.time;
     }
+    this.applyKeyboardPan(dt);
     this.controls?.update();
     this.tick(dt, this.time);
 
@@ -188,6 +205,25 @@ export class LidarEngine {
     else this.renderer.render(this.scene, this.camera);
     this.rafId = requestAnimationFrame(this.loop);
   };
+
+  /** Glide the orbit rig along the ground plane for held arrow keys (forward/back + strafe; no vertical). */
+  private applyKeyboardPan(dt: number): void {
+    if (!this.controls || this.panKeys.size === 0) return;
+    this.camera.getWorldDirection(this.panFwd);
+    this.panFwd.y = 0;
+    if (this.panFwd.lengthSq() < 1e-6) return; // looking straight down → no ground heading
+    this.panFwd.normalize();
+    this.panRight.crossVectors(this.panFwd, this.worldUp).normalize();
+    const distToTarget = this.camera.position.distanceTo(this.controls.target);
+    const step = this.keyPanSpeed * distToTarget * dt;
+    this.panDelta.set(0, 0, 0);
+    if (this.panKeys.has('ArrowUp')) this.panDelta.addScaledVector(this.panFwd, step);
+    if (this.panKeys.has('ArrowDown')) this.panDelta.addScaledVector(this.panFwd, -step);
+    if (this.panKeys.has('ArrowRight')) this.panDelta.addScaledVector(this.panRight, step);
+    if (this.panKeys.has('ArrowLeft')) this.panDelta.addScaledVector(this.panRight, -step);
+    this.camera.position.add(this.panDelta);
+    this.controls.target.add(this.panDelta);
+  }
 
   /** Set the cursor aim from canvas-relative client coordinates. */
   aimAt(clientX: number, clientY: number): void {
@@ -270,6 +306,8 @@ export class LidarEngine {
     this.disposed = true;
     this.running = false;
     cancelAnimationFrame(this.rafId);
+    if (this.onPanKeyDown) window.removeEventListener('keydown', this.onPanKeyDown);
+    if (this.onPanKeyUp) window.removeEventListener('keyup', this.onPanKeyUp);
     this.sampler.dispose();
     this.pointCloud.dispose();
     this.ownedRamp?.dispose();
