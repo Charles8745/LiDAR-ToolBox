@@ -87,6 +87,11 @@ export class LidarEngine {
   private panDelta = new THREE.Vector3();
   private worldUp = new THREE.Vector3(0, 1, 0);
 
+  // recenter orbit pivot onto the screen-center ground point when a rotate-drag starts
+  private centerNdc = new THREE.Vector2(0, 0);
+  private rotateRaycaster = new THREE.Raycaster();
+  private onRotateDown?: (e: MouseEvent) => void;
+
   constructor(opts: LidarEngineOptions) {
     this.renderer = new THREE.WebGLRenderer({ canvas: opts.canvas, antialias: true });
     this.renderer.setClearColor(0x05060a, 1);
@@ -134,6 +139,20 @@ export class LidarEngine {
         window.addEventListener('keydown', this.onPanKeyDown);
         window.addEventListener('keyup', this.onPanKeyUp);
       }
+      // Pan along the ground plane (not screen space) so the pivot never drifts vertically.
+      this.controls.screenSpacePanning = false;
+      // On a rotate-drag (left button), recenter the pivot onto the ground point at screen center —
+      // the point already lies on the view-center ray, so the camera doesn't jump, and rotation then
+      // spins around what's in the middle of the view instead of a stale/airborne target.
+      this.onRotateDown = (e: MouseEvent) => {
+        if (e.button !== 0 || !this.controls) return;
+        this.rotateRaycaster.setFromCamera(this.centerNdc, this.camera);
+        const { origin, direction } = this.rotateRaycaster.ray;
+        if (direction.y >= -1e-4) return; // not looking down at the ground
+        const t = -origin.y / direction.y;
+        if (t > 0) this.controls.target.copy(origin).addScaledVector(direction, t);
+      };
+      this.renderer.domElement.addEventListener('mousedown', this.onRotateDown);
       this.controls.update();
     } else {
       this.camera.position.set(0, 0, 0);
@@ -323,6 +342,7 @@ export class LidarEngine {
     cancelAnimationFrame(this.rafId);
     if (this.onPanKeyDown) window.removeEventListener('keydown', this.onPanKeyDown);
     if (this.onPanKeyUp) window.removeEventListener('keyup', this.onPanKeyUp);
+    if (this.onRotateDown) this.renderer.domElement.removeEventListener('mousedown', this.onRotateDown);
     this.sampler.dispose();
     this.pointCloud.dispose();
     this.ownedRamp?.dispose();
