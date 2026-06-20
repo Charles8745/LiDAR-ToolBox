@@ -27,6 +27,10 @@ export interface LidarEngineOptions {
   /** Orbit dolly clamps (world units). Prevents zooming onto the pivot (feels "stuck") or out to nothing. */
   cameraMinDistance?: number;
   cameraMaxDistance?: number;
+  /** Enable arrow-key panning of the orbit camera (OrbitControls built-in, listens on window). */
+  keyboardPan?: boolean;
+  /** Pan distance per arrow keypress in pixels (OrbitControls keyPanSpeed; default 7). */
+  keyPanSpeed?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
   /** Single group on BLOOM_LAYER, or an array of independently-tuned groups (each with its own `layer`). */
@@ -104,6 +108,10 @@ export class LidarEngine {
       this.controls.enableDamping = true;
       if (opts.cameraMinDistance !== undefined) this.controls.minDistance = opts.cameraMinDistance;
       if (opts.cameraMaxDistance !== undefined) this.controls.maxDistance = opts.cameraMaxDistance;
+      if (opts.keyboardPan) {
+        this.controls.listenToKeyEvents(window);
+        if (opts.keyPanSpeed !== undefined) this.controls.keyPanSpeed = opts.keyPanSpeed;
+      }
       this.controls.update();
     } else {
       this.camera.position.set(0, 0, 0);
