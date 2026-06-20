@@ -27,10 +27,12 @@ export interface LidarEngineOptions {
   /** Orbit dolly clamps (world units). Prevents zooming onto the pivot (feels "stuck") or out to nothing. */
   cameraMinDistance?: number;
   cameraMaxDistance?: number;
-  /** Enable arrow-key panning of the orbit camera (continuous, ground-plane; listens on window). */
+  /** Enable keyboard panning of the orbit camera (continuous; arrows=ground plane, Space/Ctrl=vertical). */
   keyboardPan?: boolean;
-  /** Ground-plane pan speed factor (fraction of target-distance per second; default 0.8). */
+  /** Pan speed factor (fraction of target-distance per second; default 0.4). */
   keyPanSpeed?: number;
+  /** Speed multiplier while Left Shift is held (default 3). */
+  keyPanBoost?: number;
   autoScan?: boolean;
   fog?: { color?: number; near?: number; far?: number } | boolean;
   /** Single group on BLOOM_LAYER, or an array of independently-tuned groups (each with its own `layer`). */
@@ -78,7 +80,8 @@ export class LidarEngine {
   private panKeys = new Set<string>();
   private onPanKeyDown?: (e: KeyboardEvent) => void;
   private onPanKeyUp?: (e: KeyboardEvent) => void;
-  private keyPanSpeed = 0.8;
+  private keyPanSpeed = 0.4;
+  private keyPanBoost = 3;
   private panFwd = new THREE.Vector3();
   private panRight = new THREE.Vector3();
   private panDelta = new THREE.Vector3();
@@ -119,10 +122,13 @@ export class LidarEngine {
       if (opts.cameraMinDistance !== undefined) this.controls.minDistance = opts.cameraMinDistance;
       if (opts.cameraMaxDistance !== undefined) this.controls.maxDistance = opts.cameraMaxDistance;
       if (opts.keyboardPan) {
-        this.keyPanSpeed = opts.keyPanSpeed ?? 0.8;
-        const codes = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+        this.keyPanSpeed = opts.keyPanSpeed ?? 0.4;
+        this.keyPanBoost = opts.keyPanBoost ?? 3;
+        // Movement keys consume the event (stop page scroll / Space-activates-button); Shift is a modifier.
+        const moveKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ControlLeft']);
         this.onPanKeyDown = (e: KeyboardEvent) => {
-          if (codes.has(e.code)) { this.panKeys.add(e.code); e.preventDefault(); }
+          if (moveKeys.has(e.code)) { this.panKeys.add(e.code); e.preventDefault(); }
+          else if (e.code === 'ShiftLeft') { this.panKeys.add(e.code); }
         };
         this.onPanKeyUp = (e: KeyboardEvent) => { this.panKeys.delete(e.code); };
         window.addEventListener('keydown', this.onPanKeyDown);
@@ -206,21 +212,30 @@ export class LidarEngine {
     this.rafId = requestAnimationFrame(this.loop);
   };
 
-  /** Glide the orbit rig along the ground plane for held arrow keys (forward/back + strafe; no vertical). */
+  /**
+   * Glide the orbit rig for held keys: arrows = ground plane (forward/back + strafe, no vertical),
+   * Space/Left-Ctrl = up/down, Left-Shift = speed boost. Moves camera and target together so the
+   * orbit distance/angle are preserved.
+   */
   private applyKeyboardPan(dt: number): void {
     if (!this.controls || this.panKeys.size === 0) return;
+    const boost = this.panKeys.has('ShiftLeft') ? this.keyPanBoost : 1;
+    const step = this.keyPanSpeed * boost * this.camera.position.distanceTo(this.controls.target) * dt;
+    this.panDelta.set(0, 0, 0);
+    // Ground-plane heading (camera forward flattened to y=0) and its strafe axis.
     this.camera.getWorldDirection(this.panFwd);
     this.panFwd.y = 0;
-    if (this.panFwd.lengthSq() < 1e-6) return; // looking straight down → no ground heading
-    this.panFwd.normalize();
-    this.panRight.crossVectors(this.panFwd, this.worldUp).normalize();
-    const distToTarget = this.camera.position.distanceTo(this.controls.target);
-    const step = this.keyPanSpeed * distToTarget * dt;
-    this.panDelta.set(0, 0, 0);
-    if (this.panKeys.has('ArrowUp')) this.panDelta.addScaledVector(this.panFwd, step);
-    if (this.panKeys.has('ArrowDown')) this.panDelta.addScaledVector(this.panFwd, -step);
-    if (this.panKeys.has('ArrowRight')) this.panDelta.addScaledVector(this.panRight, step);
-    if (this.panKeys.has('ArrowLeft')) this.panDelta.addScaledVector(this.panRight, -step);
+    if (this.panFwd.lengthSq() >= 1e-6) {
+      this.panFwd.normalize();
+      this.panRight.crossVectors(this.panFwd, this.worldUp).normalize();
+      if (this.panKeys.has('ArrowUp')) this.panDelta.addScaledVector(this.panFwd, step);
+      if (this.panKeys.has('ArrowDown')) this.panDelta.addScaledVector(this.panFwd, -step);
+      if (this.panKeys.has('ArrowRight')) this.panDelta.addScaledVector(this.panRight, step);
+      if (this.panKeys.has('ArrowLeft')) this.panDelta.addScaledVector(this.panRight, -step);
+    }
+    if (this.panKeys.has('Space')) this.panDelta.y += step;        // up
+    if (this.panKeys.has('ControlLeft')) this.panDelta.y -= step;  // down
+    if (this.panDelta.lengthSq() === 0) return;
     this.camera.position.add(this.panDelta);
     this.controls.target.add(this.panDelta);
   }
