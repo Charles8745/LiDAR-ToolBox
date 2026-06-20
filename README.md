@@ -4,16 +4,18 @@ A reusable LiDAR-style point-cloud scanning engine for the web (Scanner Sombre s
 
 ## Showcase — 高雄港 LiDAR 戰情室 (Kaohsiung port digital twin)
 
-A dark "situation-room" digital twin of the Port of Kaohsiung, built on this engine from **real geographic data** — OSM coastline / piers / breakwaters / storage tanks / cranes / anchorages, Taiwan Port Corp. (TWPort) berth-occupancy snapshots, and an NLSC aerial orthophoto basemap — all on one shared local projection.
+A dark "situation-room" digital twin of the Port of Kaohsiung, built on this engine from **real geographic data** — OSM coastline / piers / breakwaters / storage tanks / cranes / anchorages, an NLSC aerial orthophoto basemap, **real AIS ship tracks** (Taiwan MPB public feed) replayed on a 24-hour timeline, and **official surveyed berth coordinates** (Taiwan Port Corp. KHB feed) — all on one shared local projection.
 
-![Kaohsiung port war-room](docs/assets/kaohsiung-warroom.jpeg)
+![Kaohsiung port war-room](docs/assets/kaohsiung-warroom.gif)
 
-Each feature category is an independent point-cloud layer (config-driven registry) with its own colour / brightness / size / glow; storage tanks and cranes are rendered as 3D point volumes. Selective multi-group bloom, a scrub-able 24-hour occupancy timeline, ship-type vs status views, and live tuning via `window.__twin`. The colour hierarchy keeps saturated **ships** (data) and the red **incoming** marker (alert) reading against neutral-grey **landmarks** and dim cool-grey **structure**.
+Each feature category is an independent point-cloud layer (config-driven registry) with its own colour / brightness / size / glow; storage tanks and cranes are rendered as 3D point volumes. Selective multi-group bloom, a scrub-able 24-hour occupancy timeline, ship-type vs status views, in-scene **berth-number labels** at real coordinates (aligned with the live AIS ships), and live tuning via `window.__twin`. The colour hierarchy keeps saturated **ships** (data) and the red **incoming** marker (alert) reading against neutral-grey **landmarks** and dim cool-grey **structure**.
 
 ```bash
 npm run dev
 # open the printed URL, then go to /examples/kaohsiung-port/index.html
 ```
+
+**Operate it:** drag to orbit (the pivot recenters on the middle of your view) · scroll to zoom · **↑↓←→** pan along the ground · **Space / Left-Ctrl** rise / descend · hold **Left-Shift** to move faster · scrub or ▶ the timeline to watch a day of traffic.
 
 Data is read from frozen, reproducible snapshots; refresh them with `npm run port:fetch` (TWPort), `npm run port:osm` (OSM), `npm run port:basemap` (NLSC). See [docs/vscode-dev-guide.md](docs/vscode-dev-guide.md) for the tuning/dev guide and `docs/superpowers/` for the specs & plans.
 
