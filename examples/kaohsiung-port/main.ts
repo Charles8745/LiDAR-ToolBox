@@ -180,6 +180,9 @@ const engine = new LidarEngine({
   cameraFar: dist * 6,
   cameraMinDistance: 10,        // 別 dolly 到 pivot 上(會卡住、難轉);留 ~400m 仍可貼近看碼頭碼
   cameraMaxDistance: dist * 3,  // 別縮太遠變一點
+  keyboardPan: true,            // ↑↓←→ 沿地面前後左右;空白=上升、左Ctrl=下降;左Shift=加速
+  keyPanSpeed: 0.2,             // 速度因子(每秒移動 ≈ 0.2×當前縮放距離)
+  keyPanBoost: 3,              // 按住左 Shift 時 ×3
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
   // Glow follows the visual hierarchy: ships(data) > landmarks > structure.
   bloom: [
