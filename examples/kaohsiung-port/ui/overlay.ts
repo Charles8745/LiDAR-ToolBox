@@ -17,7 +17,13 @@ const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ESC[c]);
 
 declare global {
   interface Window {
-    LiquidGlass?: { init?: (c?: unknown) => void; attach?: (el: Element) => void; refresh?: () => void; supported?: boolean };
+    LiquidGlass?: {
+      init?: (c?: unknown) => void;
+      attach?: (el: Element) => void;
+      refresh?: () => void;
+      supported?: boolean;
+      behaviors?: { slider?: (el: Element) => void; switchTension?: (el: Element) => void };
+    };
   }
 }
 
@@ -181,11 +187,23 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   const play = document.createElement('button');
   play.className = 'lg lg-btn lg-btn--icon'; play.setAttribute('data-lg', '');
   play.textContent = '▶';
+  const sliderWrap = document.createElement('div');
+  sliderWrap.className = 'lg lg-slider'; sliderWrap.setAttribute('data-lg', '');
+  sliderWrap.style.cssText = 'flex:1;height:auto;padding:0 10px';
   const slider = document.createElement('input');
-  slider.type = 'range'; slider.style.flex = '1';
+  slider.className = 'lg-slider__input'; slider.type = 'range';
+  sliderWrap.appendChild(slider);
+  // Glass fill (--lg-fill) only repaints on 'input'; playback sets value
+  // programmatically (dispatching 'input' would trigger stopPlay), so repaint manually.
+  const paintFill = () => {
+    const mn = +slider.min, mx = +slider.max;
+    const p = mx > mn ? ((+slider.value - mn) / (mx - mn)) * 100 : 0;
+    slider.style.setProperty('--lg-fill', p + '%');
+  };
+  window.LiquidGlass?.behaviors?.slider?.(slider);
   const tclock = document.createElement('span');
   tclock.style.cssText = 'min-width:96px;text-align:right;font-variant-numeric:tabular-nums';
-  timeline.append(speed, play, slider, tclock);
+  timeline.append(speed, play, sliderWrap, tclock);
 
   let playing = false; let timer = 0;
   function stopPlay() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
@@ -197,7 +215,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
       if (!playing) return;
       let v = +slider.value + advancePerFrame(+slider.max - +slider.min, speedStep);
       if (v > +slider.max) v = +slider.min;
-      slider.value = String(v); handlers.onScrub(v); timer = requestAnimationFrame(stepFn);
+      slider.value = String(v); paintFill(); handlers.onScrub(v); timer = requestAnimationFrame(stepFn);
     };
     if (playing) timer = requestAnimationFrame(stepFn);
   });
@@ -286,7 +304,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     },
     hideVessel() { detail.style.display = 'none'; },
     setTimeRange({ minMs, maxMs, nowMs }) {
-      slider.min = String(minMs); slider.max = String(maxMs); slider.value = String(nowMs);
+      slider.min = String(minMs); slider.max = String(maxMs); slider.value = String(nowMs); paintFill();
     },
     setClock(ms) { clock.textContent = fmtClock(ms); tclock.textContent = fmtClock(ms); },
     setTrend(points) {
