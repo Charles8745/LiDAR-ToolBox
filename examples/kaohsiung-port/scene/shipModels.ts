@@ -3,6 +3,12 @@ import type { ShipCategory } from '../palette';
 import { SHIP_CATEGORIES } from '../palette';
 import type { PointBatch } from './portPoints';
 import containerJson from '../data/ship-models/貨櫃.json';
+import oilJson from '../data/ship-models/油品.json';
+import bulkJson from '../data/ship-models/散雜.json';
+import lngJson from '../data/ship-models/LNG.json';
+import tugJson from '../data/ship-models/工作.json';
+import warshipJson from '../data/ship-models/軍艦.json';
+import cruiseJson from '../data/ship-models/客運.json';
 
 /** Unit-space model: long axis +x (length 1), x/z centered, min-y=0. Geometry only. */
 export interface ShipModelTemplate { points: Float32Array }
@@ -43,6 +49,13 @@ export function placeModelPoints(
 // e.g.  import containerJson from '../data/ship-models/貨櫃.json';
 const RAW: Partial<Record<ShipCategory, { points: number[] }>> = {
   貨櫃: containerJson,
+  油品: oilJson,
+  散雜: bulkJson,
+  LNG: lngJson,
+  工作: tugJson,
+  軍艦: warshipJson,
+  客運: cruiseJson,
+  // 其他: 無模型 → 平面 footprint fallback
 };
 
 export const CATEGORY_MODEL_KEYS: Record<ShipCategory, string | null> = Object.fromEntries(

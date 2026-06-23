@@ -8,7 +8,7 @@ A dark "situation-room" digital twin of the Port of Kaohsiung, built on this eng
 
 ![Kaohsiung port war-room](docs/assets/kaohsiung-warroom.gif)
 
-Each feature category is an independent point-cloud layer (config-driven registry) with its own colour / brightness / size / glow; storage tanks and cranes are rendered as 3D point volumes. Selective multi-group bloom, a scrub-able 24-hour occupancy timeline, ship-type vs status views, in-scene **berth-number labels** at real coordinates (aligned with the live AIS ships), and live tuning via `window.__twin`. The colour hierarchy keeps saturated **ships** (data) and the red **incoming** marker (alert) reading against neutral-grey **landmarks** and dim cool-grey **structure**.
+Each feature category is an independent point-cloud layer (config-driven registry) with its own colour / brightness / size / glow; storage tanks and cranes are rendered as 3D point volumes. **Ships are stereoscopic point clouds baked from 3D models** — per category (container / oil tanker / bulk / LNG / tug / warship / cruise; others fall back to a flat footprint), contour-sliced and voxel-downsampled offline, then at runtime uniform-scaled to each vessel's real LOA and rotated to its heading. Selective multi-group bloom, a scrub-able 24-hour occupancy timeline, ship-type vs status views, in-scene **berth-number labels** at real coordinates (aligned with the live AIS ships), and live tuning via `window.__twin`. The colour hierarchy keeps saturated **ships** (data) and the red **incoming** marker (alert) reading against neutral-grey **landmarks** and dim cool-grey **structure**.
 
 ```bash
 npm run dev
@@ -17,7 +17,7 @@ npm run dev
 
 **Operate it:** drag to orbit (the pivot recenters on the middle of your view) · scroll to zoom · **↑↓←→** pan along the ground · **Space / Left-Ctrl** rise / descend · hold **Left-Shift** to move faster · scrub or ▶ the timeline to watch a day of traffic.
 
-Data is read from frozen, reproducible snapshots; refresh them with `npm run port:fetch` (TWPort), `npm run port:osm` (OSM), `npm run port:basemap` (NLSC). See [docs/vscode-dev-guide.md](docs/vscode-dev-guide.md) for the tuning/dev guide and `docs/superpowers/` for the specs & plans.
+Data is read from frozen, reproducible snapshots; refresh them with `npm run port:fetch` (TWPort), `npm run port:osm` (OSM), `npm run port:basemap` (NLSC), and `npm run port:models` (bake ship 3D models → point-cloud templates). See [docs/vscode-dev-guide.md](docs/vscode-dev-guide.md) for the tuning/dev guide and `docs/superpowers/` for the specs & plans.
 
 ## Install
 

@@ -118,9 +118,15 @@ const layerHandles = buildLayers(LAYERS, osm, proj);
 const shipTypeLUT = buildCategoryLUT(SHIP_CATEGORY_COLORS);
 const shipStatusLUT = buildCategoryLUT(STATUS_COLORS);
 const shipPC = new PointCloud({
-  capacity: 300_000, ramp: shipTypeLUT,
-  persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 3, maxPointSize: 5,
+  // 8 類中 7 類有 3D 模型(每艘 ~1.4–5.5k 點),尖峰在港 354 艘 → 實測每幀 ~980k 點。
+  // updateShips 每幀重建整層;容量自 300k 拉到 1.5M(~1.5× 餘裕)。多船型加密 → 用
+  // __twin.shipPC.points.geometry.drawRange.count 量測尖峰、回頭調 cellFrac 或此容量。
+  capacity: 1_500_000, ramp: shipTypeLUT,
+  // 亮度旋鈕(船太亮調這裡):pointSize=點大小(2.5,原 3;小=重疊少、過曝少)、下方 setBrightness
+  // =點核心亮度、再下方 bloom 群組1 strength(發光暈,最大來源)。
+  persistence: 'accumulate', colorMode: 'value', sizeAttenuation: false, pointSize: 2.5, maxPointSize: 5,
 });
+shipPC.setBrightness(0.65); // 點核心亮度(1=原始)。配合 bloom 群組1 strength 控制船整體亮度。
 
 interface AisCenter { track: AisTrack; vessel: VesselRecord | null; x: number; y: number; z: number; }
 let shipCenters: AisCenter[] = [];
@@ -196,7 +202,7 @@ const engine = new LidarEngine({
   pointBudget: 1, // engine's internal scan cloud is unused (autoScan:false); minimal allocation
   // Glow follows the visual hierarchy: ships(data) > landmarks > structure.
   bloom: [
-    { layer: 1, strength: 0.5,  radius: 0.12, threshold: 0.05 }, // 群組1=船(資料,主角)
+    { layer: 1, strength: 0.38, radius: 0.12, threshold: 0.05 }, // 群組1=船(資料,主角;strength=發光暈,船太亮↓此值)
     { layer: 3, strength: 0.05, radius: 0.1,  threshold: 0.0 },  // 群組3=結構(海岸線/碼頭/防波堤,幾乎不發光)
     { layer: 4, strength: 0.18, radius: 0.25, threshold: 0.0 },  // 群組4=地標(儲槽/起重機/錨地,微光退背景)
   ],

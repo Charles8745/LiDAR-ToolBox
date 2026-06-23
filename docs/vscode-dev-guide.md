@@ -399,7 +399,9 @@ pyftsubset NotoSansTC-Regular.otf \
 | `count` | surface | surface 模式的總點數(slice 不看)。預設 `2500` |
 | `seed` | surface | surface 取樣亂數種子(可重現)。預設 `1` |
 
-> **怎麼定 `forwardAxis`/`upAxis`**:模型常被巢狀矩陣轉過向,**accessor 的 bbox 不準**。最可靠是烘焙後在瀏覽器看一眼:船**躺平**→ `upAxis` 錯;船**橫著比細**(長軸沒沿航向)→ `forwardAxis` 指到了寬邊。或先量世界 bbox(最長軸=forward、垂直軸=up)。
+> **怎麼定 `forwardAxis`/`upAxis`(實戰最可靠做法)**:**先量原始幾何的世界 bbox** —— `collectTriangles(scene)` 後算 x/y/z span,**最長軸=`forwardAxis`(船長)、垂直軸=`upAxis`**。光在瀏覽器目視會被騙:`normalizeToUnit` 會把 `forwardAxis` 硬塞成 x 並縮放成長度 1,所以**即使 `forwardAxis` 設錯,船的「形狀」仍對(等比保留),只是被旋轉 90° + 沿垂直方向放大成 ~8×LOA** —— 總覽會看到「過大、糊成發光毯」的船。**驗證捷徑**:烘出後看 `ship-models/<船型>.json` 的 x/y/z span,正確時 **x≈1(最長)、y/z 都 <1**;若 z 遠大於 1 → `forwardAxis` 指到了寬邊(改成 `'z'` 重烘)。
+>
+> **實例(本專案 7 模型)**:`貨櫃` 是 length-along-**x**(預設可用);其餘 6 個 Sketchfab 模型(油品/散雜/LNG/工作/軍艦/客運)都是 length-along-**z** → 在 `MODEL_BAKE_CONFIG` 各加 `forwardAxis: 'z'`(`upAxis` 維持 `'y'`,Sketchfab Y-up)。一次性量軸工具:臨時寫個 script 用 `collectTriangles` 印各模型 raw bbox span(用完即刪)。
 
 **② 執行期旋鈕**
 
@@ -411,7 +413,7 @@ pyftsubset NotoSansTC-Regular.otf \
 | 顏色 | 不在模型裡 | 執行期依船型 palette(`updateShips` 的 `mode`)上色,**模型只存幾何** |
 | 旋轉/縮放邏輯 | `shipModels.ts` `placeModelPoints` | 等比 ×LOA、heading 旋轉,慣例對齊 `sampleShipFootprint`(**別動**) |
 
-> **點數預算**:`shipPC` capacity = 300k([main.ts](../examples/kaohsiung-port/main.ts) 約 120 行),RingBuffer 滿了覆蓋最舊。每幀預算 = Σ(可見船點數)。模型船每艘 = 烘焙後點數(貨櫃≈5.5k),平面 fallback≈39。只有貨櫃有模型時很寬鬆;**若多船型都上、尖峰逼近 300k → 把 `cellFrac` 調大降密度,或調高 `shipPC` capacity**。
+> **點數預算**:`shipPC` capacity = **1.5M**([main.ts](../examples/kaohsiung-port/main.ts) 約 120 行,8 類中 7 類有模型後自 300k 拉高),RingBuffer 滿了覆蓋最舊。每幀預算 = Σ(可見船點數),`updateShips` **每幀重建整層**(scrub/播放都會跑),所以總點數同時吃 GPU 與每幀 CPU/GC。各模型烘後點數:貨櫃 5.5k、工作 4.9k、LNG 2.5k、散雜 2.0k、軍艦 2.0k、油品/客運 1.4k,平面 fallback(其他)≈39。**實測尖峰**:在港 354 艘 → 約 **980k 點**(`__twin.shipPC.points.geometry.drawRange.count` 量)。**若再加密或船更多、尖峰逼近 capacity → 把 `cellFrac` 調大降密度,或調高 capacity**。注意 `forwardAxis` 設錯會讓船膨脹成 ~8×LOA、點數暴增到數萬(見上方軸向說明)。
 
 **③ 完整流程(加一個新船型)**
 
