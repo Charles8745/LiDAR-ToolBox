@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mulberry32, surfaceSample, normalizeToUnit, sliceSample, subsample, type Triangle } from '../examples/kaohsiung-port/scene/meshSampling';
+import { mulberry32, surfaceSample, normalizeToUnit, sliceSample, subsample, voxelDownsample, type Triangle } from '../examples/kaohsiung-port/scene/meshSampling';
 
 // 單一三角形落在 z=0 平面 → 所有取樣點應 z≈0 且在三角形 bbox 內。
 const flat: Triangle = { a: { x: 0, y: 0, z: 0 }, b: { x: 4, y: 0, z: 0 }, c: { x: 0, y: 3, z: 0 } };
@@ -154,5 +154,28 @@ describe('subsample', () => {
 
   it('is deterministic for a given seed', () => {
     expect(Array.from(subsample(pts, 5, mulberry32(7)))).toEqual(Array.from(subsample(pts, 5, mulberry32(7))));
+  });
+});
+
+describe('voxelDownsample', () => {
+  it('keeps one point per occupied grid cell', () => {
+    // 10 points along x at 0,0.1,...,0.9 (y=z=0); cell 0.5 → 2 occupied cells.
+    const line = new Float32Array(30);
+    for (let i = 0; i < 10; i++) { line[i * 3] = i * 0.1; }
+    const out = voxelDownsample(line, 0.5);
+    expect(out.length).toBe(6); // 2 points
+  });
+
+  it('preserves distinct cells (no over-merging) and is idempotent', () => {
+    const line = new Float32Array(30);
+    for (let i = 0; i < 10; i++) { line[i * 3] = i * 0.1; }
+    const once = voxelDownsample(line, 0.25); // cells 0,0,0 | ... → 0..0.225, .25.., .5.., .75.. = 4 cells
+    expect(once.length).toBe(12);
+    expect(Array.from(voxelDownsample(once, 0.25))).toEqual(Array.from(once)); // idempotent
+  });
+
+  it('returns input unchanged for non-positive cell', () => {
+    const a = new Float32Array([1, 2, 3]);
+    expect(voxelDownsample(a, 0)).toBe(a);
   });
 });

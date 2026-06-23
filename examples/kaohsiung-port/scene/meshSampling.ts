@@ -126,6 +126,27 @@ export function subsample(positions: Float32Array, target: number, rng: () => nu
   return out;
 }
 
+/**
+ * Voxel-grid downsample: snap every point to a `cell`-sized 3D grid and keep one point per
+ * occupied cell. Unlike random subsample (which scatters structured lines back into noise), this
+ * yields an evenly-spaced cloud that PRESERVES structure — clean contour lines stay clean lines.
+ * Deterministic (keeps the first point seen per cell).
+ */
+export function voxelDownsample(positions: Float32Array, cell: number): Float32Array {
+  const n = positions.length / 3;
+  if (n === 0 || cell <= 0) return positions;
+  const seen = new Set<string>();
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+    const key = `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(x, y, z);
+  }
+  return Float32Array.from(out);
+}
+
 export interface SliceOpts { axis: Axis; layers: number; stepFrac: number }
 
 /**
