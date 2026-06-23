@@ -163,7 +163,7 @@ document.querySelectorAll('#overlay .lg-stat, #overlay .lg-card').forEach(e => e
 | 船 點大小 | `main.ts` `shipPC` 的 `pointSize` / `maxPointSize` | 像素(`sizeAttenuation:false`) |
 | 船 footprint 大小 / 去重疊 | `main.ts` `SHIP_FOOTPRINT`(見 §4i) | `0.6` = 真實 LOA 的 60% |
 | 靜態層 點大小 | `main.ts` `LAYERS` 各筆的 `pointSize` / `maxPointSize`(見 §4h) | 像素 |
-| 點雲各層高度(y 堆疊) | 靜態層→`LAYERS` 的 `baseY`(× S);船→`main.ts` `SHIP_Y = 0.5*S`;底圖→`buildBasemapPlane` 的 `position.set`(見 §4g) | 底圖 0 / 靜態 0(錨地 0.05*S)/ 船 0.5*S |
+| 點雲各層高度(y 堆疊) | 靜態層→`LAYERS` 的 `baseY`(× S);船→`main.ts` `SHIP_Y = 0.01*S`;底圖→`buildBasemapPlane` 的 `position.set`(見 §4g) | 底圖 0 / 靜態 0(錨地 0.05*S)/ 船 0.01*S(貼水面) |
 
 ### 4d. 多群組 bloom(各層獨立發光參數)
 
@@ -209,13 +209,13 @@ pc.setPulseHz(2);  // 改頻率;0 = 恆亮
 | 航照底圖平面 | `0` | `main.ts` `buildBasemapPlane()` 的 `mesh.position.set(…, 0, …)` |
 | 靜態層(海岸線/碼頭/防波堤/儲槽/起重機) | `baseY`(預設 `0`) | `main.ts` `LAYERS` 各筆的 `baseY` |
 | 錨地圈 | `0.05*S` | `LAYERS` anchorage 的 `baseY` |
-| 船舶點雲 | `0.5*S` | `main.ts` 常數 `SHIP_Y = 0.5*S`(`updateShips` 用,亦寫進 `centers.y`) |
+| 船舶點雲 | `0.01*S` | `main.ts` 常數 `SHIP_Y = 0.01*S`(`updateShips` 用,亦寫進 `centers.y`;模型船的 keel 由此坐上水面) |
 
 > F4 之後 `Y_WATER` 已移除;靜態層高度改由各層 `LAYERS` 的 `baseY` 控制(3D 的儲槽/起重機從 `baseY` 往上長 `height`/`legHeight`)。
 
 - **靜態層高度**:改該層 `LAYERS` 的 `baseY`。
 - **船層高度**:改 `main.ts` 的 `SHIP_Y`(= `0.5*S`,`updateShips` 用)。
-- **單位換算**:`WORLD_SCALE = 0.025`(1 單位 = 40m),所以 `SHIP_Y = 0.5*S = 1.25` ≈ 真實 50m 高。純視覺分層,別當公尺解讀。
+- **單位換算**:`WORLD_SCALE = 0.025`(1 單位 = 40m),`S = 2.5`,所以 `SHIP_Y = 0.01*S = 0.025` ≈ 貼著水面(原為 `0.5*S`=1.25「浮空」,已降到水線)。純視覺分層,別當公尺解讀;3D 模型船的 keel(min-y=0)由此坐上水面。
 - **改 `SHIP_Y` 會連帶影響點擊挑選**:`updateShips` 把同一個 `SHIP_Y` 寫進 `centers.y`,而點船是用 `centers` 投影到螢幕做最近距離比對——用同一常數(現況)即一致。
 - Console 即時平移整層試:`__twin.shipPC.points.position.y = 3`(暫時,⌘R 還原)。
 
@@ -407,7 +407,7 @@ pyftsubset NotoSansTC-Regular.otf \
 |---|---|---|
 | 哪些船型有模型 | `shipModels.ts` 的 `RAW`(import JSON + 加一行) | 沒列的船型 = 平面 footprint fallback |
 | 船整體大小 / 去重疊 | `main.ts` `SHIP_FOOTPRINT`(§4i) | `0.6` = 真實 LOA 的 60%;模型船也吃(等比) |
-| 船高度(離水面) | `main.ts` `SHIP_Y = 0.5*S`(§4g) | 模型 min-y 已貼 0 → 坐在水面 |
+| 船高度(離水面) | `main.ts` `SHIP_Y = 0.01*S`(§4g) | 模型 min-y 已貼 0 → 坐在水面(原 0.5*S 會浮空) |
 | 顏色 | 不在模型裡 | 執行期依船型 palette(`updateShips` 的 `mode`)上色,**模型只存幾何** |
 | 旋轉/縮放邏輯 | `shipModels.ts` `placeModelPoints` | 等比 ×LOA、heading 旋轉,慣例對齊 `sampleShipFootprint`(**別動**) |
 
