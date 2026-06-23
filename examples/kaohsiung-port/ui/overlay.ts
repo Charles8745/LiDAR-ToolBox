@@ -128,7 +128,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   SHIP_CATEGORIES.forEach((cat, i) => {
     const rowEl = document.createElement('label');
     rowEl.className = 'lg-check';
-    rowEl.style.cssText = 'margin:3px 0;font-size:12px';
+    rowEl.style.cssText = 'display:flex;margin:3px 0;font-size:12px';
     rowEl.innerHTML = `<input type="checkbox" checked>
       <span class="lg-check__box"><svg class="lg-check__mark" viewBox="0 0 256 256"><use href="#ph-check"/></svg></span>
       <span class="lg-check__label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin-right:5px;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${esc(cat)}</span>`;
