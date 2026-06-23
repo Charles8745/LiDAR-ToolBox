@@ -40,6 +40,16 @@ html, body { background: #0B0C0E; color: var(--ink); }
 /* Stepper +/- glyphs: lift affordance (kit default sits at 62% opacity). */
 #overlay .lg-stepper__btn { color: rgba(238, 242, 249, 0.88); }
 
+/* --- Cinematic restraint: strip the glossy liquid-glass decoration so the
+   3D port scene reads as the hero and the HUD recedes to clean dark panels.
+   (Kept as scoped overrides; the vendored kit stays a clean copy.) --- */
+/* Remove the pointer-follow sheen blob (decorative radial-gradient). */
+#overlay .lg::after { display: none; }
+/* Flatten the glossy rim-light + inner glow down to one hairline edge. */
+#overlay .lg::before { box-shadow: inset 0 0 0 1px var(--lg-stroke-soft); }
+/* Replace the floating drop shadow with a quiet, flat seat. */
+#overlay .lg { box-shadow: 0 1px 20px rgba(0, 0, 0, 0.32); }
+
 @keyframes fade-rise {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
