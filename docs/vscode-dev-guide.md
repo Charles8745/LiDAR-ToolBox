@@ -370,6 +370,72 @@ pyftsubset NotoSansTC-Regular.otf \
 - LOD 距離度量目前是**相機到場景原點的 3D 距離**(含高度):若使用者拉高仰角,altitude 分量會影響距離計算、可能提早觸發 tier 切換 → 必要時切換為 XZ 平面距離(詳見 Task 9 後續)。
 - `ANGLE`(船席方位角)已從 GetMarker 取得但 v1 未使用(billboard 朝相機,非朝船席朝向)。
 
+### 4k. 船 3D 模型 → 點雲(GLB 烘焙)—— 所有可調屬性一塊看
+
+把一個 3D 船模型(GLB)烘成點雲模板,執行期每艘該船型的船依 LOA 等比縮放、依 heading 旋轉展開。**有模型的船型用立體點雲,沒模型的自動 fallback 回平面 footprint。** 引擎 `src/` 零改動。
+
+**檔案分工**
+
+| 檔案 | 角色 |
+|---|---|
+| `examples/kaohsiung-port/data/models/<船型>.glb` | 原始素材(**git-ignored**,只留你本機);檔名 = ShipCategory(如 `貨櫃.glb`) |
+| `examples/kaohsiung-port/data/fetch-ship-models.ts` | `npm run port:models` 烘焙器 + **所有烘焙旋鈕**(`DEFAULT_CFG` / `MODEL_BAKE_CONFIG`) |
+| `examples/kaohsiung-port/data/ship-models/<船型>.json` | 烘出的正規化點雲模板(**這個才 commit**) |
+| `examples/kaohsiung-port/scene/shipModels.ts` | `RAW` 註冊表(哪些船型啟用)、`placeModelPoints`(執行期變換) |
+| `examples/kaohsiung-port/scene/meshSampling.ts` | 純取樣數學(`sliceSample` / `voxelDownsample` / `surfaceSample` / `normalizeToUnit`) |
+| `examples/kaohsiung-port/data/models/CREDITS.md` | 模型授權標註(CC-BY 要附作者) |
+
+**① 烘焙旋鈕** —— 改 `fetch-ship-models.ts` 的 `DEFAULT_CFG`(全模型預設)或 `MODEL_BAKE_CONFIG['船型']`(單一船型覆寫),然後 `npm run port:models` 重烘:
+
+| 屬性 | 模式 | 說明 / 預設 |
+|---|---|---|
+| `sampling` | — | `'slice'`(**預設**,輪廓切片,看得出船)\| `'surface'`(面積亂撒,低點數會糊,休眠) |
+| `cellFrac` | slice | **控制密度的主旋鈕**:voxel 網格邊長(正規化空間,長軸=1)。**調小=更密更多點;調大=更稀更少點**。預設 `0.012`(貨櫃≈5.5k 點) |
+| `layers` | slice | 沿高度切幾層水平面。多=細、少=粗。預設 `48` |
+| `stepFrac` | slice | 切線上的取樣點距(× bbox 對角線)。要**夠小**讓線連續(之後交給 voxel 規則化)。預設 `0.004` |
+| `forwardAxis` | 兩者 | 模型「船頭」在世界空間的軸(`'x'`/`'y'`/`'z'`)。**船躺平或轉錯向就改這個**。預設 `'x'` |
+| `upAxis` | 兩者 | 模型「上」軸 + slice 的切片方向。預設 `'y'` |
+| `signForward` | 兩者 | 船頭正負向 `1`/`-1`(模型前後顛倒時用)。預設 `1` |
+| `count` | surface | surface 模式的總點數(slice 不看)。預設 `2500` |
+| `seed` | surface | surface 取樣亂數種子(可重現)。預設 `1` |
+
+> **怎麼定 `forwardAxis`/`upAxis`**:模型常被巢狀矩陣轉過向,**accessor 的 bbox 不準**。最可靠是烘焙後在瀏覽器看一眼:船**躺平**→ `upAxis` 錯;船**橫著比細**(長軸沒沿航向)→ `forwardAxis` 指到了寬邊。或先量世界 bbox(最長軸=forward、垂直軸=up)。
+
+**② 執行期旋鈕**
+
+| 屬性 | 在哪改 | 說明 / 預設 |
+|---|---|---|
+| 哪些船型有模型 | `shipModels.ts` 的 `RAW`(import JSON + 加一行) | 沒列的船型 = 平面 footprint fallback |
+| 船整體大小 / 去重疊 | `main.ts` `SHIP_FOOTPRINT`(§4i) | `0.6` = 真實 LOA 的 60%;模型船也吃(等比) |
+| 船高度(離水面) | `main.ts` `SHIP_Y = 0.5*S`(§4g) | 模型 min-y 已貼 0 → 坐在水面 |
+| 顏色 | 不在模型裡 | 執行期依船型 palette(`updateShips` 的 `mode`)上色,**模型只存幾何** |
+| 旋轉/縮放邏輯 | `shipModels.ts` `placeModelPoints` | 等比 ×LOA、heading 旋轉,慣例對齊 `sampleShipFootprint`(**別動**) |
+
+> **點數預算**:`shipPC` capacity = 300k([main.ts](../examples/kaohsiung-port/main.ts) 約 120 行),RingBuffer 滿了覆蓋最舊。每幀預算 = Σ(可見船點數)。模型船每艘 = 烘焙後點數(貨櫃≈5.5k),平面 fallback≈39。只有貨櫃有模型時很寬鬆;**若多船型都上、尖峰逼近 300k → 把 `cellFrac` 調大降密度,或調高 `shipPC` capacity**。
+
+**③ 完整流程(加一個新船型)**
+
+```bash
+# 1. 取得模型(Sketchfab 等;搜 "low poly <type> ship";優先 CC0/CC-BY)。
+#    多半下載成 gltf 資料夾(scene.gltf + scene.bin + textures/),不是單檔 glb。
+# 2. Node 的 GLTFLoader 對「有貼圖」的模型會炸(無 DOM)→ 先轉成「純幾何」glb:
+python3 - <<'PY'
+import json
+d=json.load(open('container_ship/scene.gltf'))
+for k in ('images','textures','samplers','materials'): d.pop(k,None)
+for m in d.get('meshes',[]):
+    for p in m.get('primitives',[]): p.pop('material',None)
+json.dump(d, open('container_ship/scene_geom.gltf','w'))
+PY
+npm_config_cache=/tmp/npmcache npx gltf-pipeline -i container_ship/scene_geom.gltf -o 貨櫃.glb
+# 3. 放成 data/models/<船型>.glb（檔名=船型），烘焙：
+npm run port:models      # → data/ship-models/<船型>.json
+# 4. 在 scene/shipModels.ts：import 該 JSON + 加進 RAW（見檔內註解範例）。
+# 5. npm run dev 看；不滿意 → 調 ①(多半是 cellFrac / forwardAxis) 重烘。
+```
+
+> **陷阱**:`npx`/npm 遇 `~/.npm` 權限錯 → `export npm_config_cache=/tmp/npmcache`。原始 glb/gltf/貼圖**已 gitignore**(`data/models/*`,只留 `.gitkeep`/`CREDITS.md`),只 commit 烘出的 `ship-models/*.json`。CC-BY 模型記得在 `CREDITS.md` 補作者。
+
 ---
 
 ## 5. `__twin` 除錯把手(Console)
@@ -417,6 +483,8 @@ npm run port:basemap  # NLSC 航照烘焙成 data/basemap-khh.jpg(+ .json bounds
 npm run port:ais:probe   # 探 MPB 端點、印欄位、存 _probe-sample.json(首次 / schema 變動時用)
 npm run port:ais:record  # 韌性輪詢 MPB AIS,append → data/ais-tracks/raw-khh-<date>.jsonl(跑一段時間後 Ctrl-C;24h 在另一台機長跑)
 npm run port:ais:export  # raw .jsonl 聚合/清洗 → data/ais-tracks/khh-<date>.json(app 讀最新一份)
+# --- 船 3D 模型 → 點雲(見 §4k 所有旋鈕)---
+npm run port:models      # data/models/*.glb → 取樣/正規化 → data/ship-models/*.json(只 commit 後者)
 ```
 HUD 數字來源:**在港數 / 趨勢**由 `time/ais-replay.ts` 從 AIS 軌跡算;**即將進港**由 `time/occupancy.ts` 從 TWPort 預報算(基準=快照時間,標題顯示);**船位**為真實 AIS(`ais-replay.ts` 插值)。皆無造假動畫。raw `.jsonl` 與 `_probe-sample.json` 已 gitignore,只 commit 短窗 `khh-*.json`。
 
