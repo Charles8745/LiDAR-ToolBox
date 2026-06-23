@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mulberry32, surfaceSample, normalizeToUnit, type Triangle } from '../examples/kaohsiung-port/scene/meshSampling';
+import { mulberry32, surfaceSample, normalizeToUnit, sliceSample, subsample, type Triangle } from '../examples/kaohsiung-port/scene/meshSampling';
 
 // 單一三角形落在 z=0 平面 → 所有取樣點應 z≈0 且在三角形 bbox 內。
 const flat: Triangle = { a: { x: 0, y: 0, z: 0 }, b: { x: 4, y: 0, z: 0 }, c: { x: 0, y: 3, z: 0 } };
@@ -97,5 +97,62 @@ describe('normalizeToUnit', () => {
     const { bounds } = normalizeToUnit(box, { forwardAxis: 'x', upAxis: 'y' });
     expect(bounds.min).toEqual({ x: 0, y: 0, z: 0 });
     expect(bounds.max).toEqual({ x: 4, y: 1, z: 2 });
+  });
+});
+
+describe('sliceSample', () => {
+  // A vertical wall in the z=0 plane spanning x:[0,2], y:[0,2] (two triangles).
+  const wall: Triangle[] = [
+    { a: { x: 0, y: 0, z: 0 }, b: { x: 2, y: 0, z: 0 }, c: { x: 2, y: 2, z: 0 } },
+    { a: { x: 0, y: 0, z: 0 }, b: { x: 2, y: 2, z: 0 }, c: { x: 0, y: 2, z: 0 } },
+  ];
+
+  it('emits points on horizontal cut lines (constant y) lying on the wall (z≈0, x in [0,2])', () => {
+    const out = sliceSample(wall, { axis: 'y', layers: 4, stepFrac: 0.2 });
+    expect(out.length).toBeGreaterThan(0);
+    const ys = new Set<number>();
+    for (let i = 0; i < out.length; i += 3) {
+      expect(Math.abs(out[i + 2])).toBeLessThan(1e-6);        // z ≈ 0 (on the wall)
+      expect(out[i]).toBeGreaterThanOrEqual(-1e-6);           // x within [0,2]
+      expect(out[i]).toBeLessThanOrEqual(2 + 1e-6);
+      ys.add(Math.round(out[i + 1] * 1000) / 1000);
+    }
+    expect(ys.size).toBe(4); // one distinct cut height per layer
+  });
+
+  it('is deterministic (no rng) — identical output across calls', () => {
+    const a = sliceSample(wall, { axis: 'y', layers: 5, stepFrac: 0.25 });
+    const b = sliceSample(wall, { axis: 'y', layers: 5, stepFrac: 0.25 });
+    expect(Array.from(a)).toEqual(Array.from(b));
+  });
+
+  it('returns empty for zero layers or empty input', () => {
+    expect(sliceSample(wall, { axis: 'y', layers: 0, stepFrac: 0.2 }).length).toBe(0);
+    expect(sliceSample([], { axis: 'y', layers: 4, stepFrac: 0.2 }).length).toBe(0);
+  });
+});
+
+describe('subsample', () => {
+  // 10 points packed as xyz
+  const pts = new Float32Array(Array.from({ length: 30 }, (_, i) => i));
+
+  it('caps to target count, keeping whole xyz triples from the source', () => {
+    const out = subsample(pts, 4, mulberry32(1));
+    expect(out.length).toBe(12); // 4 points
+    for (let i = 0; i < out.length; i += 3) {
+      const x = out[i];
+      expect(x % 3).toBe(0);                 // x of a source point is a multiple of 3 (index*3)
+      expect(out[i + 1]).toBe(x + 1);        // triple stayed intact
+      expect(out[i + 2]).toBe(x + 2);
+    }
+  });
+
+  it('returns input unchanged when target ≥ count', () => {
+    expect(subsample(pts, 10, mulberry32(1))).toBe(pts);
+    expect(subsample(pts, 99, mulberry32(1))).toBe(pts);
+  });
+
+  it('is deterministic for a given seed', () => {
+    expect(Array.from(subsample(pts, 5, mulberry32(7)))).toEqual(Array.from(subsample(pts, 5, mulberry32(7))));
   });
 });

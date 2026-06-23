@@ -102,3 +102,79 @@ export function normalizeToUnit(positions: Float32Array, opts: NormalizeOpts): {
     },
   };
 }
+
+/**
+ * Randomly downsample a packed xyz point set to `target` points (seeded → reproducible).
+ * Returns the input unchanged when it already has ≤ target points. Used to cap the dense
+ * output of sliceSample while keeping the points on their contour lines.
+ */
+export function subsample(positions: Float32Array, target: number, rng: () => number): Float32Array {
+  const n = positions.length / 3;
+  if (target >= n || target <= 0) return positions;
+  // Partial Fisher–Yates over indices [0..n) to pick `target` distinct points.
+  const idx = new Int32Array(n);
+  for (let i = 0; i < n; i++) idx[i] = i;
+  for (let i = 0; i < target; i++) {
+    const j = i + Math.floor(rng() * (n - i));
+    const tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
+  }
+  const out = new Float32Array(target * 3);
+  for (let i = 0; i < target; i++) {
+    const s = idx[i] * 3;
+    out[i * 3] = positions[s]; out[i * 3 + 1] = positions[s + 1]; out[i * 3 + 2] = positions[s + 2];
+  }
+  return out;
+}
+
+export interface SliceOpts { axis: Axis; layers: number; stepFrac: number }
+
+/**
+ * Contour ("scan-line") sampling: cut the mesh with `layers` planes evenly spaced along `axis`,
+ * and for every triangle the plane crosses, sample points along the intersection segment at a
+ * world step = `stepFrac` × bbox diagonal. Unlike surfaceSample (which fills flat faces), this
+ * concentrates points on each layer's boundary — the outer silhouette plus internal feature edges
+ * (e.g. a ship's hull lines + stacked-container grid) — giving a far more readable shape.
+ */
+export function sliceSample(tris: Triangle[], opts: SliceOpts): Float32Array {
+  if (tris.length === 0 || opts.layers < 1) return new Float32Array(0);
+  const ai = AXES.indexOf(opts.axis);
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  const vget = (v: Vec3): number[] => [v.x, v.y, v.z];
+  for (const t of tris) for (const v of [t.a, t.b, t.c]) {
+    const a = vget(v);
+    for (let k = 0; k < 3; k++) { if (a[k] < mn[k]) mn[k] = a[k]; if (a[k] > mx[k]) mx[k] = a[k]; }
+  }
+  const span = mx[ai] - mn[ai];
+  if (span <= 0) return new Float32Array(0);
+  const diag = Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]);
+  const step = Math.max(diag * opts.stepFrac, 1e-6);
+  const out: number[] = [];
+  for (let L = 0; L < opts.layers; L++) {
+    const plane = mn[ai] + span * ((L + 0.5) / opts.layers); // mid-of-band, avoids exact min/max edges
+    for (const t of tris) {
+      const verts = [vget(t.a), vget(t.b), vget(t.c)];
+      const d = [verts[0][ai] - plane, verts[1][ai] - plane, verts[2][ai] - plane];
+      const cps: number[][] = [];
+      for (let e = 0; e < 3; e++) {
+        const i = e, j = (e + 1) % 3;
+        if ((d[i] < 0 && d[j] >= 0) || (d[i] >= 0 && d[j] < 0)) {
+          const s = d[i] / (d[i] - d[j]);
+          cps.push([
+            verts[i][0] + (verts[j][0] - verts[i][0]) * s,
+            verts[i][1] + (verts[j][1] - verts[i][1]) * s,
+            verts[i][2] + (verts[j][2] - verts[i][2]) * s,
+          ]);
+        }
+      }
+      if (cps.length !== 2) continue; // a clean crossing yields exactly 2 edge intersections
+      const [p, q] = cps;
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+      const segN = Math.max(1, Math.round(len / step));
+      for (let s = 0; s <= segN; s++) {
+        const f = s / segN;
+        out.push(p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, p[2] + (q[2] - p[2]) * f);
+      }
+    }
+  }
+  return Float32Array.from(out);
+}

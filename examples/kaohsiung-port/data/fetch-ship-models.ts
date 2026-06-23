@@ -5,19 +5,29 @@ import { fileURLToPath } from 'node:url';
 import { Group } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { collectTriangles } from '../scene/meshTriangles';
-import { surfaceSample, normalizeToUnit, mulberry32, type Axis } from '../scene/meshSampling';
+import { surfaceSample, sliceSample, subsample, normalizeToUnit, mulberry32, type Axis } from '../scene/meshSampling';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MODELS_DIR = join(HERE, 'models');
 const OUT_DIR = join(HERE, 'ship-models');
 
-interface BakeCfg { forwardAxis: Axis; upAxis: Axis; signForward: 1 | -1; count: number; seed: number }
-// count 300 ≈ 8× 現有平面 footprint(大船 ~39 點),足夠 orbit 有體積感又不擠爆 shipPC
-// 的 300k 容量(見 Global Constraints 的點數預算)。小船型可在下方 override 調更低。
-const DEFAULT_CFG: BakeCfg = { forwardAxis: 'x', upAxis: 'y', signForward: 1, count: 300, seed: 1 };
-// Per-source overrides keyed by filename without extension. Adjust forward/up after eyeballing.
+interface BakeCfg {
+  forwardAxis: Axis; upAxis: Axis; signForward: 1 | -1; seed: number;
+  sampling: 'surface' | 'slice';
+  count: number;              // 'surface': total points (area-weighted)
+  layers: number;             // 'slice': number of cut planes along upAxis
+  stepFrac: number;           // 'slice': point spacing along cut lines = stepFrac × bbox diagonal
+}
+// 'surface' = area-weighted dots over the whole hull (looks like a fuzzy cloud at low counts).
+// 'slice'   = contour scan-lines: cut the mesh with `layers` horizontal planes (along upAxis) and
+//             dot the intersection lines → hull lines + container-stack grid → reads as a ship.
+const DEFAULT_CFG: BakeCfg = {
+  forwardAxis: 'x', upAxis: 'y', signForward: 1, seed: 1,
+  sampling: 'surface', count: 300, layers: 40, stepFrac: 0.012,
+};
+// Per-source overrides keyed by filename without extension. Adjust forward/up/sampling after eyeballing.
 const MODEL_BAKE_CONFIG: Record<string, Partial<BakeCfg>> = {
-  // 貨櫃: { forwardAxis: 'z', count: 800 },
+  貨櫃: { sampling: 'slice', layers: 44, stepFrac: 0.013, count: 2500 }, // contour scan, capped to 2500 pts
 };
 
 function parseGlb(buf: ArrayBuffer): Promise<Group> {
@@ -33,13 +43,19 @@ async function bakeOne(file: string): Promise<void> {
   const scene = await parseGlb(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   const tris = collectTriangles(scene);
   if (tris.length === 0) { console.warn(`  ! ${file}: no triangles, skipped`); return; }
-  const sampled = surfaceSample(tris, cfg.count, mulberry32(cfg.seed));
+  // 'slice' over-produces points (one segment per crossed triangle) → cap to cfg.count, keeping
+  // the survivors on their contour lines.
+  const sampled = cfg.sampling === 'slice'
+    ? subsample(sliceSample(tris, { axis: cfg.upAxis, layers: cfg.layers, stepFrac: cfg.stepFrac }), cfg.count, mulberry32(cfg.seed))
+    : surfaceSample(tris, cfg.count, mulberry32(cfg.seed));
   const { positions, bounds } = normalizeToUnit(sampled, cfg);
+  const nPts = positions.length / 3;
   const lengthM = Math.max(bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z);
   const out = {
     sourceFile: `models/${file}`,
     sampledAt: new Date().toISOString(),
-    count: cfg.count,
+    sampling: cfg.sampling,
+    count: nPts,
     lengthM,
     forwardAxis: cfg.forwardAxis,
     points: Array.from(positions),
@@ -47,7 +63,7 @@ async function bakeOne(file: string): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
   const outPath = join(OUT_DIR, `${key}.json`);
   await writeFile(outPath, JSON.stringify(out));
-  console.log(`  ✓ ${file} → ship-models/${key}.json (${tris.length} tris → ${cfg.count} pts)`);
+  console.log(`  ✓ ${file} → ship-models/${key}.json (${tris.length} tris → ${cfg.sampling} → ${nPts} pts)`);
 }
 
 async function main(): Promise<void> {
