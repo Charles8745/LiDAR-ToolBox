@@ -14,6 +14,8 @@
 - **不新增 runtime 相依** —— `GLTFLoader` 來自既有 `three` 套件,只在 CLI(Node)與型別匯入使用,不進瀏覽器 bundle 的關鍵路徑。
 - **測試**:檔案放 `test/*.test.ts`,`import` 自 `../examples/kaohsiung-port/...`;用 `vitest`(`describe/it/expect`),跑 `npm test`(= `vitest run`)。env 為 node。
 - **縮放模式**:等比縮到 LOA —— 模板每軸同倍率 = 該船 `loaU`,**不**依 beam 各軸拉伸。
+- **點數預算**:`shipPC` capacity = `300_000`([main.ts](../../../examples/kaohsiung-port/main.ts) 約 120 行),底層 RingBuffer **滿了覆蓋最舊**(超量不報錯但會吃掉先加入的船的點)。每幀預算 = `Σ(該幀可見船的點數)`。模型船每艘 = 烘焙 `count`(預設 300);平面 fallback 船每艘 ~39。**規則**:`count × 尖峰同框船數 < 300_000`(單類別 300×~227 ≈ 68k,安全)。若多船型都啟用立體、尖峰逼近 300k,把 `main.ts` 的 `shipPC` capacity 調高(加法、不影響他層)。
+- **JSON import**:`tsconfig.json` 必須有 `resolveJsonModule: true`(Task 5 加),否則 `import …json` 過不了 `tsc`(`bundler` 解析也需要它;`npm run build` 只檢 `src/` 抓不到此錯)。
 - **旋轉慣例**:必須沿用 `sampleShipFootprint` —— local +x(長軸)→ 世界 `(cos h, sin h)`、local +z(寬)→ `(−sin h, cos h)`(在 (x,z) 平面)。
 - **模板座標約定**:正規化單位空間 —— 長軸 = +x、x/z 置中、**min-y = 0**(龍骨貼 y=0)。
 - **缺模型 fallback**:`CATEGORY_MODEL_KEYS` 初始全為 `null` → 行為等同現狀(全平面 footprint);逐型補 GLB 後才換立體。
@@ -450,7 +452,9 @@ const MODELS_DIR = join(HERE, 'models');
 const OUT_DIR = join(HERE, 'ship-models');
 
 interface BakeCfg { forwardAxis: Axis; upAxis: Axis; signForward: 1 | -1; count: number; seed: number }
-const DEFAULT_CFG: BakeCfg = { forwardAxis: 'x', upAxis: 'y', signForward: 1, count: 600, seed: 1 };
+// count 300 ≈ 8× 現有平面 footprint(大船 ~39 點),足夠 orbit 有體積感又不擠爆 shipPC
+// 的 300k 容量(見 Global Constraints 的點數預算)。小船型可在下方 override 調更低。
+const DEFAULT_CFG: BakeCfg = { forwardAxis: 'x', upAxis: 'y', signForward: 1, count: 300, seed: 1 };
 // Per-source overrides keyed by filename without extension. Adjust forward/up after eyeballing.
 const MODEL_BAKE_CONFIG: Record<string, Partial<BakeCfg>> = {
   // 貨櫃: { forwardAxis: 'z', count: 800 },
@@ -539,6 +543,7 @@ git commit -m "feat(port): port:models CLI — bake GLB → normalized point-clo
 
 **Files:**
 - Create: `examples/kaohsiung-port/scene/shipModels.ts`
+- Modify: `tsconfig.json`（加 `resolveJsonModule`,讓 Task 7 的 `import …json` 過 tsc)
 - Test: `test/port-ship-models.test.ts`
 
 **Interfaces:**
@@ -676,10 +681,22 @@ export function loadShipModel(category: ShipCategory): ShipModelTemplate | null 
 Run: `npx vitest run test/port-ship-models.test.ts`
 Expected: PASS（toTemplate / placeModelPoints×3 / loadShipModel 全綠)。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 開啟 resolveJsonModule(Task 7 的 JSON import 前置)**
+
+在 `tsconfig.json` 的 `compilerOptions` 加一行(放在 `esModuleInterop` 之後):
+
+```json
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+```
+
+Run: `npx tsc --noEmit -p tsconfig.json`
+Expected: 0 錯(此時 `RAW` 仍空、無 JSON import,純粹把基建準備好)。
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add examples/kaohsiung-port/scene/shipModels.ts test/port-ship-models.test.ts
+git add examples/kaohsiung-port/scene/shipModels.ts test/port-ship-models.test.ts tsconfig.json
 git commit -m "feat(port): shipModels registry + placeModelPoints + loadShipModel"
 ```
 
@@ -767,7 +784,7 @@ git commit -m "feat(port): updateShips uses ship model templates with footprint 
 把模型放成 `data/models/<船型>.glb`(檔名用該 `ShipCategory`,例如 `貨櫃.glb`)。
 
 Run: `npm run port:models`
-Expected: 印出 `✓ 貨櫃.glb → ship-models/貨櫃.json (… tris → 600 pts)`,產出 JSON。
+Expected: 印出 `✓ 貨櫃.glb → ship-models/貨櫃.json (… tris → 300 pts)`,產出 JSON。
 
 - [ ] **Step 2: 啟用 registry 對應**
 
@@ -810,3 +827,8 @@ git commit -m "feat(port): enable container ship 3D model (first baked model)"
 - 更新 handoff(`docs/superpowers/2026-06-14-handoff.md`)新增一節,並更新記憶體索引條目。
 - 剩餘 7 個船型逐一補 GLB:重複 Task 7(放素材→`port:models`→啟用 RAW 對應→目視),缺的維持 fallback。
 - 若效能不足(目標點/船過高),先降 `MODEL_BAKE_CONFIG[...].count` 重烘;仍不足才考慮 spec 的取向 B(GPU instancing,需動引擎)。
+
+### 已知微調(非 bug,日後可收斂)
+- **小船型同 count 浪費**:`placeModelPoints` 對 40m 工作船與 300m 貨櫃船用相同 `count`。工作/拖船型可在 `MODEL_BAKE_CONFIG` 設較低 `count`(如 120)省預算。
+- **非預設 forward 軸會鏡像**:`normalizeToUnit` 用軸重映射,若 `forwardAxis`/`upAxis` 造成左右手座標翻轉(例如 forward='z' 把 x↔z 交換,行列式 −1),模型會左右鏡像。對大致對稱的船殼視覺無妨;若模型有不對稱特徵且翻面,改用 `signForward: -1` 或在來源把模型轉正後用預設 `forwardAxis: 'x'`。
+- **GLTFLoader 幾何優先**:CLI 只取幾何,不需貼圖。若某 GLB 因內嵌貼圖/特殊擴充讓 `parse` 失敗,最簡解是在來源工具把模型**匯出成無貼圖 GLB** 再烘焙。
