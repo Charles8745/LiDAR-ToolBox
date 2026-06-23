@@ -127,7 +127,7 @@ let shipCenters: AisCenter[] = [];
 
 // 船 footprint 畫成真實 LOA 的此比例 → 相鄰泊位的船之間留白、不糊成一團(去重疊)。直接改這個值。
 const SHIP_FOOTPRINT = 0.6;
-const SHIP_Y = 0.5 * S;
+const SHIP_Y = 0.01 * S;
 function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>) {
   const pos: number[] = []; const val: number[] = [];
   const centers: AisCenter[] = [];
