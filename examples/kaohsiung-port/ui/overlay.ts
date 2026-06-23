@@ -167,6 +167,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   // BOTTOM timeline
   const timeline = bar('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
   // Speed stepper (1-10; today's feel = 8 = 80%; default 5). Sits left of ▶.
+  // Keep this default in sync with the input's value="5" attribute below.
   let speedStep = 5;
   const speed = document.createElement('div');
   speed.className = 'lg lg-stepper'; speed.setAttribute('data-lg', '');
