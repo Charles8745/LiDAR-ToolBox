@@ -49,6 +49,7 @@
   --lg-down-soft: rgba(210, 80, 62, 0.16);
 
   /* 圓角 */
+  --lg-radius-xs: 14px;
   --lg-radius-s: 12px;
   --lg-radius-m: 20px;
   --lg-radius-l: 28px;
@@ -120,6 +121,13 @@ html.lg-fallback .lg,
 .lg-static {
   -webkit-backdrop-filter: blur(var(--lg-blur-fallback)) saturate(var(--lg-saturate-fallback));
   backdrop-filter: blur(var(--lg-blur-fallback)) saturate(var(--lg-saturate-fallback));
+}
+
+/* 降級模式下 regular 材質加重磨砂(特異度 0,3,0 > 上方 0,2,1,穩勝) */
+html.lg-fallback .lg--regular,
+html.lg-fallback .lg.lg--regular {
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur-fallback) * 1.7)) saturate(1.2);
+  backdrop-filter: blur(calc(var(--lg-blur-fallback) * 1.7)) saturate(1.2);
 }
 
 /* 鏡面高光:左上亮、右下暗的 rim light + 內緣柔光 */
@@ -340,6 +348,98 @@ html.lg-fallback .lg,
 }
 
 /* ==================================================================== *
+ * 7b. 文字輸入  .lg-field(浮動標籤;玻璃只在 __box,label/hint 為實心內容)
+ * ==================================================================== */
+.lg-field { display: flex; flex-direction: column; gap: 6px; }
+.lg-field__box {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 58px;
+  padding: 0 14px;
+  /* 邊框/陰影/圓角沿用 .lg 基底:.lg 已給 border-radius:var(--lg-radius-m)
+     + box-shadow:var(--lg-shadow);.lg::before 已給 inset 1px stroke 與 rim。
+     此處只加 transition 供 focus/error ring 動畫;hover 回饋由 .lg:hover::after 既有 sheen 負責。 */
+  transition: box-shadow var(--lg-speed) var(--lg-ease-out);
+}
+.lg-field__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font: 400 15px/1.2 var(--lg-font);
+  color: var(--lg-text);
+  padding: 24px 0 6px;
+}
+.lg-field__label {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font: 400 15px/1 var(--lg-font);
+  color: var(--lg-text-dim);
+  pointer-events: none;
+  transform-origin: left center;
+  transition: transform var(--lg-speed) var(--lg-ease-out), color var(--lg-speed) var(--lg-ease-out);
+}
+.lg-field__input:focus + .lg-field__label,
+.lg-field__input:not(:placeholder-shown) + .lg-field__label {
+  transform: translateY(-16px) scale(.78);
+  color: var(--lg-accent);
+}
+.lg-field__box:focus-within {
+  box-shadow: var(--lg-shadow), 0 0 0 2px var(--lg-accent);
+}
+.lg-field__clear {
+  flex: none;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 8px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--lg-text-dim);
+  cursor: pointer;
+  transition: color var(--lg-speed) var(--lg-ease-out), background var(--lg-speed) var(--lg-ease-out);
+}
+.lg-field__clear svg { width: 15px; height: 15px; fill: currentColor; }
+.lg-field__clear:hover { color: var(--lg-text); background: var(--lg-tint); }
+.lg-field__input:placeholder-shown ~ .lg-field__clear { display: none; }
+.lg-field__hint { font: 400 12.5px/1.3 var(--lg-font); color: var(--lg-text-dim); padding: 0 4px; }
+.lg-field--error .lg-field__box,
+.lg-field--error .lg-field__box:focus-within {
+  box-shadow: var(--lg-shadow), 0 0 0 2px var(--lg-down);
+}
+.lg-field--error .lg-field__input + .lg-field__label { color: var(--lg-down); }
+.lg-field--error .lg-field__hint { color: var(--lg-down); }
+.lg-field--disabled .lg-field__box { opacity: .5; }
+.lg-field--disabled .lg-field__input { cursor: not-allowed; }
+.lg-field__input:read-only { color: var(--lg-text-dim); }
+
+/* Textarea 變體:多行,複用 __box + 浮動標籤;label 貼頂、可垂直 resize、無清除鈕 */
+.lg-field--area .lg-field__input {
+  resize: vertical;
+  min-height: 96px;
+  padding: 22px 0 10px;
+  line-height: 1.45;
+}
+/* 隱藏原生方形 resizer 抓柄:它落在圓角玻璃框的圓弧角旁、又被 box 內距往內推,
+   位置不協調。仍保留 resize:vertical(底緣可拖、游標仍是 ns-resize) */
+.lg-field--area .lg-field__input::-webkit-resizer { display: none; }
+.lg-field--area .lg-field__label {
+  top: 22px;
+  height: auto;
+  transform-origin: left top;
+}
+
+/* ==================================================================== *
  * 8. 開關  .lg-switch(純 CSS,checkbox)
  * ==================================================================== */
 .lg-switch {
@@ -391,6 +491,280 @@ html.lg-fallback .lg-switch__track,
   outline: 2px solid var(--lg-accent);
   outline-offset: 3px;
 }
+
+/* ==================================================================== *
+ * 8b. 核取方塊  .lg-check(純 CSS,checkbox;box 磨砂,勾為實心內容)
+ * ==================================================================== */
+.lg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  font: 500 14px/1 var(--lg-font);
+  color: var(--lg-text);
+  user-select: none;
+}
+.lg-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lg-check__box {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--lg-radius-s);
+  background: var(--lg-tint);
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke-soft);
+  transition: background var(--lg-speed) var(--lg-ease-out),
+              box-shadow var(--lg-speed) var(--lg-ease-out),
+              scale var(--lg-speed) var(--lg-ease);
+}
+html.lg-fallback .lg-check__box,
+.lg-check__box {
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+}
+.lg-check__mark {
+  position: absolute;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  color: #fff;
+  fill: currentColor;
+  scale: 0;
+  transition: scale var(--lg-speed) cubic-bezier(.34, 1.56, .64, 1);
+}
+.lg-check:hover .lg-check__box {
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke);
+  scale: 1.04;
+}
+.lg-check:active .lg-check__box { scale: 0.92; }
+.lg-check input:checked + .lg-check__box,
+.lg-check input:indeterminate + .lg-check__box {
+  background: var(--lg-accent);
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px transparent;
+}
+.lg-check input:checked + .lg-check__box .lg-check__mark { scale: 1; }
+.lg-check input:indeterminate + .lg-check__box .lg-check__mark { scale: 0; }
+.lg-check input:indeterminate + .lg-check__box::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  top: 50%;
+  height: 2px;
+  border-radius: 1px;
+  background: #fff;
+  transform: translateY(-50%);
+}
+.lg-check input:focus-visible + .lg-check__box {
+  outline: 2px solid var(--lg-accent);
+  outline-offset: 3px;
+}
+.lg-check input:disabled ~ .lg-check__box,
+.lg-check input:disabled ~ .lg-check__label { opacity: 0.45; }
+
+/* ==================================================================== *
+ * 8c. 單選  .lg-radio(純 CSS,radio;圓 box + 中心圓點,點為實心內容)
+ * ==================================================================== */
+.lg-radio-group { display: flex; flex-direction: column; gap: 12px; }
+.lg-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  font: 500 14px/1 var(--lg-font);
+  color: var(--lg-text);
+  user-select: none;
+}
+.lg-radio input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lg-radio__box {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lg-tint);
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke-soft);
+  transition: background var(--lg-speed) var(--lg-ease-out),
+              box-shadow var(--lg-speed) var(--lg-ease-out),
+              scale var(--lg-speed) var(--lg-ease);
+}
+html.lg-fallback .lg-radio__box,
+.lg-radio__box {
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+}
+.lg-radio__box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  scale: 0;
+  transition: scale var(--lg-speed) cubic-bezier(.34, 1.56, .64, 1);
+}
+.lg-radio:hover .lg-radio__box {
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke);
+  scale: 1.04;
+}
+.lg-radio:active .lg-radio__box { scale: 0.92; }
+.lg-radio input:checked + .lg-radio__box {
+  background: var(--lg-accent);
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px transparent;
+}
+.lg-radio input:checked + .lg-radio__box::after { scale: 1; }
+.lg-radio input:focus-visible + .lg-radio__box {
+  outline: 2px solid var(--lg-accent);
+  outline-offset: 3px;
+}
+.lg-radio input:disabled ~ .lg-radio__box,
+.lg-radio input:disabled ~ .lg-radio__label { opacity: 0.45; }
+
+/* ==================================================================== *
+ * 8d. 步進器  .lg-stepper(玻璃容器 + native number + −/+ 鈕)
+ * ==================================================================== */
+.lg-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: var(--lg-radius-pill);
+  transition: box-shadow var(--lg-speed) var(--lg-ease-out);
+}
+.lg-stepper__btn {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--lg-text-dim);
+  cursor: pointer;
+  transition: scale var(--lg-speed) var(--lg-ease),
+              background var(--lg-speed) var(--lg-ease-out),
+              color var(--lg-speed) var(--lg-ease-out);
+}
+.lg-stepper__btn svg { width: 18px; height: 18px; fill: currentColor; }
+.lg-stepper__btn:hover { background: var(--lg-tint); color: var(--lg-text); }
+.lg-stepper__btn:active { scale: 0.9; }
+.lg-stepper__input {
+  width: 44px;
+  flex: none;
+  border: 0;
+  background: transparent;
+  outline: none;
+  text-align: center;
+  font: 600 15px/1 var(--lg-font);
+  color: var(--lg-text);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.lg-stepper__input::-webkit-outer-spin-button,
+.lg-stepper__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.lg-stepper:focus-within {
+  box-shadow: var(--lg-shadow), 0 0 0 2px var(--lg-accent);
+}
+.lg-stepper--disabled { opacity: 0.5; }
+
+/* ==================================================================== *
+ * 8e. 星等評分  .lg-rating(純 CSS,radio;reverse DOM + ~ 選擇器,星非玻璃)
+ * ==================================================================== */
+.lg-rating {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  gap: 2px;
+}
+.lg-rating input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lg-rating__star {
+  display: inline-flex;
+  cursor: pointer;
+  color: var(--lg-text-dim);
+  transition: color var(--lg-speed) var(--lg-ease-out),
+              scale var(--lg-speed) var(--lg-ease);
+}
+.lg-rating__star svg { width: 28px; height: 28px; fill: currentColor; }
+/* 2. 已選及更低星 → accent */
+.lg-rating input:checked ~ label { color: var(--lg-accent); }
+/* 3. 容器 hover 時全部重置 dim(特異度同規則 2、置於其後 → 勝出) */
+.lg-rating:hover input ~ label { color: var(--lg-text-dim); }
+/* 4. hover 預覽:hovered + 更低星 → accent(特異度高於規則 3 → 勝出);hovered 彈一下 */
+.lg-rating:hover label:hover,
+.lg-rating:hover label:hover ~ label { color: var(--lg-accent); }
+.lg-rating:hover label:hover { scale: 1.12; }
+/* focus / disabled */
+.lg-rating input:focus-visible + label { outline: 2px solid var(--lg-accent); outline-offset: 2px; }
+.lg-rating--disabled { opacity: 0.5; pointer-events: none; }
+
+/* ==================================================================== *
+ * 8f. 驗證碼  .lg-otp(N 個 bespoke 磨砂 input;initOtp 自動進格)
+ * ==================================================================== */
+.lg-otp { display: inline-flex; gap: 8px; }
+.lg-otp__cell {
+  width: 44px;
+  height: 52px;
+  flex: none;
+  border: 0;
+  border-radius: var(--lg-radius-s);
+  background: var(--lg-tint);
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke-soft);
+  text-align: center;
+  font: 600 21px/1 var(--lg-font);
+  color: var(--lg-text);
+  outline: none;
+  transition: box-shadow var(--lg-speed) var(--lg-ease-out);
+}
+html.lg-fallback .lg-otp__cell,
+.lg-otp__cell {
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+}
+.lg-otp__cell:focus {
+  box-shadow: var(--lg-shadow-soft), inset 0 0 0 1px var(--lg-stroke-soft), 0 0 0 2px var(--lg-accent);
+}
+.lg-otp__cell:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ==================================================================== *
+ * 8g. 檔案上傳  .lg-upload(折射玻璃拖放區 + DataTransfer 清單)
+ * ==================================================================== */
+.lg-upload {
+  display: block;
+  border-radius: var(--lg-radius-l);
+  padding: 28px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: box-shadow var(--lg-speed) var(--lg-ease-out);
+}
+.lg-upload__input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.lg-upload__prompt { display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.lg-upload__icon { width: 40px; height: 40px; fill: currentColor; color: var(--lg-text-dim); }
+.lg-upload__title { margin: 0; font: 500 14px/1.4 var(--lg-font); color: var(--lg-text); }
+.lg-upload__title strong { color: var(--lg-accent); font-weight: 600; }
+.lg-upload__hint { margin: 0; font: 400 12px/1 var(--lg-font); color: var(--lg-text-dim); }
+.lg-upload:focus-within,
+.lg-upload.is-dragover { box-shadow: var(--lg-shadow), 0 0 0 2px var(--lg-accent); }
+.lg-upload.is-dragover .lg-upload__icon { color: var(--lg-accent); }
+.lg-upload__list { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lg-upload__list:empty { display: none; }
+.lg-upload__file {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--lg-radius-s);
+  background: var(--lg-tint); text-align: left;
+}
+.lg-upload__fileicon { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--lg-text-dim); }
+.lg-upload__name { flex: 1; min-width: 0; font: 500 13px/1.2 var(--lg-font); color: var(--lg-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-upload__size { flex: none; font: 400 12px/1 var(--lg-font); color: var(--lg-text-dim); }
+.lg-upload__remove {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--lg-text-dim); cursor: pointer;
+  transition: color var(--lg-speed) var(--lg-ease-out), background var(--lg-speed) var(--lg-ease-out);
+}
+.lg-upload__remove svg { width: 14px; height: 14px; fill: currentColor; }
+.lg-upload__remove:hover { background: var(--lg-tint); color: var(--lg-text); }
+.lg-upload--disabled { opacity: 0.5; pointer-events: none; }
 
 /* ==================================================================== *
  * 9. 滑桿  .lg-slider(range)
@@ -535,6 +909,7 @@ html.lg-fallback .lg-switch__track,
 @media (prefers-reduced-motion: reduce) {
   .lg-modal.is-open .lg-modal__panel { animation: none; }
 }
+.lg-modal__panel.is-morphing { animation: none !important; }
 
 /* ==================================================================== *
  * 12. 工具提示  .lg-tooltip(JS 建立的單例)
@@ -544,7 +919,7 @@ html.lg-fallback .lg-switch__track,
   z-index: 80;
   max-width: 240px;
   padding: 9px 13px;
-  border-radius: 13px;
+  border-radius: var(--lg-radius-xs);
   font: 500 13px/1.45 var(--lg-font);
   color: var(--lg-text);
   background: var(--lg-tint-strong);
@@ -575,7 +950,7 @@ html.lg-fallback .lg-switch__track,
   width: 48px;
   height: 48px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--lg-radius-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -924,6 +1299,13 @@ html.lg-fallback .lg-switch__track,
   .lg-glow::before,
   .lg-glow::after { animation: none !important; transition: none !important; }
   .lg-btn, .lg-tabs__pill, .lg-switch__thumb, .lg-modal__panel { transition-duration: 0.01s !important; }
+  .lg-check__mark, .lg-check__box { transition-duration: 0.01s !important; }
+  .lg-radio__box, .lg-radio__box::after { transition-duration: 0.01s !important; }
+  .lg-stepper__btn { transition-duration: 0.01s !important; }
+  .lg-rating__star { transition-duration: 0.01s !important; }
+  .lg-otp__cell { transition-duration: 0.01s !important; }
+  .lg-upload { transition-duration: 0.01s !important; }
+  .lg-field__label, .lg-field__box { transition-duration: 0.01s !important; }
 }
 
 
@@ -970,3 +1352,28 @@ html.lg-fallback .lg-switch__track,
 }
 .lg-switch__goo i.on { left: 28px; }
 .lg-switch__goo i.fade { transform: scale(0); }
+
+/* ------------------------------------------------------------------ *
+ * B1 捲動縮小 — is-condensed
+ * ------------------------------------------------------------------ */
+.lg-navbar[data-lg-shrink],
+.lg-tabs[data-lg-shrink] {
+  transition: padding var(--lg-speed) var(--lg-ease),
+              transform var(--lg-speed) var(--lg-ease),
+              opacity var(--lg-speed) var(--lg-ease);
+}
+.lg-navbar.is-hidden,
+.lg-tabs.is-hidden { transform: translateY(-140%); opacity: 0; pointer-events: none; }
+
+.lg-navbar.is-condensed { padding-top: 4px; padding-bottom: 4px; }
+.lg-navbar.is-condensed .lg-navbar__brand,
+.lg-navbar.is-condensed .lg-navbar__link {
+  padding-top: 5px; padding-bottom: 5px; font-size: 0.88em;
+  transition: padding var(--lg-speed) var(--lg-ease), font-size var(--lg-speed) var(--lg-ease);
+}
+.lg-tabs.is-condensed { padding: 3px; }
+.lg-tabs.is-condensed .lg-tabs__pill { top: 3px; bottom: 3px; }
+.lg-tabs.is-condensed .lg-tabs__tab {
+  padding-top: 6px; padding-bottom: 6px; font-size: 0.9em;
+  transition: padding var(--lg-speed) var(--lg-ease), font-size var(--lg-speed) var(--lg-ease);
+}

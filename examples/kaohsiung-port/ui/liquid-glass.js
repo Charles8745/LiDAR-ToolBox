@@ -84,6 +84,12 @@
     maxWidth: 900       // 超過此寬度自動減弱折射,避免 GPU 卡頓
   };
 
+  // 材質變體(B6):現狀 = Clear;Regular 較霧較不透,內容上可讀(數值可實機微調)
+  var MATERIALS = {
+    clear:   { blur: 1.6, saturate: 1.55, refraction: 1.25 },
+    regular: { blur: 7.0, saturate: 1.20, refraction: 0.90 }
+  };
+
   /* ------------------------------------------------------------------ *
    * 2. 斷面函數 — 距邊緣 t∈[0,1] 處的玻璃相對高度
    *    Apple 偏好 squircle:平面到曲面的過渡最柔和
@@ -298,6 +304,28 @@
     return Math.min(v, Math.min(w, h) / 2);
   }
 
+  function applyConcentric(el) {
+    var parent = el.parentElement;
+    while (parent && !parent.classList.contains('lg')) parent = parent.parentElement;
+    if (!parent) return;                       // 找不到 lg 父層 → no-op
+    function r(v) { return parseFloat(v) || 0; }
+    var pcs = getComputedStyle(parent);
+    var ptl = r(pcs.borderTopLeftRadius), ptr = r(pcs.borderTopRightRadius),
+        pbr = r(pcs.borderBottomRightRadius), pbl = r(pcs.borderBottomLeftRadius);
+    if (!(ptl || ptr || pbr || pbl)) return;   // 父無圓角 → no-op
+    var prc = parent.getBoundingClientRect(), crc = el.getBoundingClientRect();
+    var gapL = crc.left - prc.left - r(pcs.borderLeftWidth);
+    var gapT = crc.top - prc.top - r(pcs.borderTopWidth);
+    var gapR = prc.right - crc.right - r(pcs.borderRightWidth);
+    var gapB = prc.bottom - crc.bottom - r(pcs.borderBottomWidth);
+    var MIN = 4;
+    function corner(prad, ga, gb) { return Math.max(prad - Math.max(ga, gb), MIN); } // 角由相鄰兩邊定義,取大者
+    el.style.borderTopLeftRadius     = corner(ptl, gapL, gapT) + 'px';
+    el.style.borderTopRightRadius    = corner(ptr, gapR, gapT) + 'px';
+    el.style.borderBottomRightRadius = corner(pbr, gapR, gapB) + 'px';
+    el.style.borderBottomLeftRadius  = corner(pbl, gapL, gapB) + 'px';
+  }
+
   function Glass(elm, opts) {
     opts = opts || {};
     this.el = elm;
@@ -340,6 +368,8 @@
     if (w < 2 || h < 2) return;
 
     var o = this.opts;
+    var mat = elm.classList.contains('lg--regular') ? MATERIALS.regular
+            : elm.classList.contains('lg--clear')   ? MATERIALS.clear : null;
     var profile = o.profile || config.profile;
     var thickness = isNaN(o.thickness) ? config.thickness : o.thickness;
     var bezel = isNaN(o.bezel)
@@ -351,15 +381,15 @@
     var map = buildMap(w, h, radius, bezel, thickness, profile, config.ior);
 
     // 折射倍率(大面積自動減弱)
-    var refraction = isNaN(o.refraction) ? config.refraction : o.refraction;
+    var refraction = !isNaN(o.refraction) ? o.refraction : (mat ? mat.refraction : config.refraction);
     if (w > config.maxWidth) refraction *= config.maxWidth / w;
     // 貼圖編碼為 (C-0.5) ∈ ±0.5,故 scale 乘 2 才等於 maxMag 像素的實際位移
     var scale = map.maxMag * refraction * 2;
 
     // 色散:三通道位移差
     var ca = (isNaN(o.chromatic) ? config.chromatic : o.chromatic) * 0.12;
-    var blur = isNaN(o.blur) ? config.blur : o.blur;
-    var sat = isNaN(o.saturate) ? config.saturate : o.saturate;
+    var blur = !isNaN(o.blur) ? o.blur : (mat ? mat.blur : config.blur);
+    var sat = !isNaN(o.saturate) ? o.saturate : (mat ? mat.saturate : config.saturate);
 
     // filter 區域維持 0%–100%(objectBoundingBox),feImage 用元素像素尺寸
     var img = this.nodes.image;
@@ -541,7 +571,92 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 9. 元件行為:tabs / slider / modal / tooltip / dock
+   * 9. 共用 scroll util(B1 建立,B5 沿用)
+   * ------------------------------------------------------------------ */
+  /* makeScrollWatcher(target) → { subscribe(cb) }  cb 收 { y, dy, atTop, atBottom } */
+  function makeScrollWatcher(target) {
+    var t = target || window, subs = [], raf = 0;
+    function getY() { return t === window ? (window.scrollY || window.pageYOffset || 0) : t.scrollTop; }
+    function maxY() {
+      return t === window
+        ? (document.documentElement.scrollHeight - window.innerHeight)
+        : (t.scrollHeight - t.clientHeight);
+    }
+    var lastY = getY();
+    function tick() {
+      raf = 0;
+      var y = getY(), m = maxY();
+      var s = { y: y, dy: y - lastY, atTop: y <= 1, atBottom: y >= m - 1 };
+      lastY = y;
+      subs.forEach(function (cb) { cb(s); });
+    }
+    function onScroll() { if (!raf) raf = requestAnimationFrame(tick); }
+    t.addEventListener('scroll', onScroll, { passive: true });
+    return {
+      subscribe: function (cb) { subs.push(cb); var y0 = getY(); cb({ y: y0, dy: 0, atTop: y0 <= 1, atBottom: y0 >= maxY() - 1 }); },
+      destroy: function () { t.removeEventListener('scroll', onScroll); subs = []; }
+    };
+  }
+  var _winScroll = null;
+  function getWindowScroll() { return _winScroll || (_winScroll = makeScrollWatcher(window)); }
+
+  /* ------------------------------------------------------------------ *
+   * 9b. initScrollShrink(B1):navbar / tabs data-lg-shrink 下捲縮小
+   * ------------------------------------------------------------------ */
+  function initScrollShrink() {
+    var bars = [].slice.call(document.querySelectorAll('[data-lg-shrink]'));
+    if (!bars.length || REDUCED_MOTION) return;   // reduced-motion:定在展開、不隱藏
+    var THRESH = 6, CONDENSE_AT = 24, HIDE_AT = 90;
+    function setCondensed(bar, want) {
+      if (bar.classList.contains('is-condensed') === want) return;
+      bar.classList.toggle('is-condensed', want);
+      // tabs:padding transition 結束後重定位藥丸(只認 bar 自身的 padding 過渡,防子 tab 冒泡與堆疊)
+      if (bar.classList.contains('lg-tabs') && bar._lgRepositionPill && !bar._lgPillPending) {
+        bar._lgPillPending = true;
+        bar.addEventListener('transitionend', function te(e) {
+          if (e.target !== bar || e.propertyName.indexOf('padding') !== 0) return;
+          bar._lgPillPending = false;
+          bar.removeEventListener('transitionend', te);
+          bar._lgRepositionPill();
+        });
+      }
+    }
+    getWindowScroll().subscribe(function (s) {
+      bars.forEach(function (bar) {
+        setCondensed(bar, s.y >= CONDENSE_AT);     // 第一段:縮小(位置驅動)
+        var hide;                                   // 第二段:隱藏(方向驅動)
+        if (s.y < CONDENSE_AT) hide = false;        // 近頂一律現身
+        else if (s.dy > THRESH && s.y > HIDE_AT) hide = true;   // 往下且夠深 → 隱藏
+        else if (s.dy < -THRESH) hide = false;      // 往上 → 現身
+        else hide = bar.classList.contains('is-hidden');       // 維持
+        bar.classList.toggle('is-hidden', hide);
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 9c. initScrollEdge(B5):data-lg-scroll-edge 容器邊緣漸隱 mask
+   * ------------------------------------------------------------------ */
+  function initScrollEdge() {
+    [].slice.call(document.querySelectorAll('[data-lg-scroll-edge]')).forEach(function (el) {
+      var mode = el.getAttribute('data-lg-scroll-edge') || 'both';
+      var useTop = mode === 'top' || mode === 'both';
+      var useBot = mode === 'bottom' || mode === 'both';
+      var FADE = 36;
+      makeScrollWatcher(el).subscribe(function (s) {
+        var max = el.scrollHeight - el.clientHeight;
+        var t = useTop ? Math.max(0, Math.min(s.y, FADE)) : 0;         // 距頂越遠,頂緣漸隱帶越長(平滑淡入)
+        var b = useBot ? Math.max(0, Math.min(max - s.y, FADE)) : 0;   // 距底越遠,底緣漸隱帶越長
+        if (!t && !b) { el.style.webkitMaskImage = ''; el.style.maskImage = ''; return; }
+        var m = 'linear-gradient(to bottom, transparent 0, #000 ' + t.toFixed(1) + 'px, #000 calc(100% - ' + b.toFixed(1) + 'px), transparent 100%)';
+        el.style.webkitMaskImage = m;
+        el.style.maskImage = m;
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 10. 元件行為:tabs / slider / modal / tooltip / dock
    * ------------------------------------------------------------------ */
   function initTabs(root) {
     var pill = root.querySelector('.lg-tabs__pill');
@@ -578,6 +693,10 @@
         e.preventDefault();
       });
     });
+    root._lgRepositionPill = function () {
+      var act = root.querySelector('.lg-tabs__tab.is-active') || tabs[0];
+      if (act && pill) { pill.style.width = act.offsetWidth + 'px'; pill.style.left = act.offsetLeft + 'px'; }
+    };
     var active = root.querySelector('.lg-tabs__tab.is-active') || tabs[0];
     if (active) requestAnimationFrame(function () { move(active); });
   }
@@ -592,26 +711,73 @@
     paint();
   }
 
+  function morphFrom(origin, panel) {
+    // 量測前先中性化 transform:is-open 的 transition 在 t=0 尚未推進,面板仍是 base 的
+    // scale(0.86) translateY(18px),直接量會量到縮放盒 → FLIP 的 sx/sy/dx/dy 全偏(實測差約 14%/33px)。
+    var savedTrans = panel.style.transition;
+    panel.style.transition = 'none';
+    panel.style.transform = 'none';
+    var o = origin.getBoundingClientRect(), p = panel.getBoundingClientRect(); // 強制 reflow → 真正靜止盒
+    panel.style.transform = '';            // 交回 CSS(is-open = transform:none)
+    panel.style.transition = savedTrans;
+    if (!p.width || !p.height) return false;
+    var dx = (o.left + o.width / 2) - (p.left + p.width / 2);
+    var dy = (o.top + o.height / 2) - (p.top + p.height / 2);
+    var sx = Math.max(o.width / p.width, 0.05), sy = Math.max(o.height / p.height, 0.05);
+    panel.animate([
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sx.toFixed(3) + ',' + sy.toFixed(3) + ')', opacity: 0.4 },
+      { transform: 'none', opacity: 1 }
+    ], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    return true;  // 全程保留折射(不關 backdrop-filter)
+  }
+
   function initModals() {
     var lastFocus = null;
-    function open(modal) {
+    function open(modal, origin) {
+      if (modal.classList.contains('is-open')) return;   // 已開啟則不重入(避免雙重 morph)
       lastFocus = document.activeElement;
       modal.classList.add('is-open');
       modal.setAttribute('aria-hidden', 'false');
+      var panel = modal.querySelector('.lg-modal__panel');
+      if (FULL) instances.forEach(function (g) { if (modal.contains(g.el)) g.update(); });
+      var morphed = false;
+      if (panel && origin && !REDUCED_MOTION && panel.animate) {
+        panel.classList.add('is-morphing');                   // 抑制 keyframe,WAAPI 獨佔
+        morphed = morphFrom(origin, panel);
+        if (!morphed) panel.classList.remove('is-morphing');  // 量不到盒 → 回退既有預設 keyframe
+      }
+      if (panel) panel._lgOrigin = morphed ? origin : null;
       var f = modal.querySelector('button, [href], input, [tabindex]');
       if (f) f.focus();
-      if (FULL) instances.forEach(function (g) { if (modal.contains(g.el)) g.update(); });
     }
-    function close(modal) {
+    function finishClose(modal) {
       modal.classList.remove('is-open');
       modal.setAttribute('aria-hidden', 'true');
+      var panel = modal.querySelector('.lg-modal__panel');
+      if (panel) panel.classList.remove('is-morphing');   // 清乾淨,下次開啟才正常
       if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+    function close(modal) {
+      var panel = modal.querySelector('.lg-modal__panel');
+      if (panel && panel._lgOrigin && !REDUCED_MOTION && panel.animate) {
+        var o = panel._lgOrigin.getBoundingClientRect(), p = panel.getBoundingClientRect();
+        var dx = (o.left + o.width / 2) - (p.left + p.width / 2);
+        var dy = (o.top + o.height / 2) - (p.top + p.height / 2);
+        var sx = Math.max(o.width / p.width, 0.05), sy = Math.max(o.height / p.height, 0.05);
+        var anim = panel.animate([
+          { transform: 'none', opacity: 1 },
+          { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sx.toFixed(3) + ',' + sy.toFixed(3) + ')', opacity: 0.3 }
+        ], { duration: 300, easing: 'cubic-bezier(.4,0,.7,.2)' });
+        anim.onfinish = function () { finishClose(modal); };
+      } else {
+        finishClose(modal);
+      }
     }
     document.addEventListener('click', function (e) {
       var t = e.target.closest ? e.target.closest('[data-lg-open]') : null;
       if (t) {
         var m = document.querySelector(t.getAttribute('data-lg-open'));
-        if (m) open(m);
+        if (m) open(m, t);     // t = 觸發按鈕,作為 morph origin
         return;
       }
       var c = e.target.closest ? e.target.closest('[data-lg-close]') : null;
@@ -624,6 +790,117 @@
       if (e.key !== 'Escape') return;
       var openModal = document.querySelector('.lg-modal.is-open');
       if (openModal) close(openModal);
+    });
+  }
+
+  function initClearFields() {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-lg-clear]') : null;
+      if (!btn) return;
+      var box = btn.closest('.lg-field__box');
+      var input = box ? box.querySelector('.lg-field__input') : null;
+      if (!input) return;
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.focus();
+    });
+  }
+
+  function initSteppers() {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-lg-step]') : null;
+      if (!btn) return;
+      var box = btn.closest('.lg-stepper');
+      var input = box ? box.querySelector('.lg-stepper__input') : null;
+      if (!input || input.disabled) return;
+      var n = parseInt(btn.getAttribute('data-lg-step'), 10) || 0;
+      if (n > 0) input.stepUp(n);
+      else if (n < 0) input.stepDown(-n);
+      else return;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  function initOtp(otp) {
+    var cells = [].slice.call(otp.querySelectorAll('.lg-otp__cell'));
+    cells.forEach(function (cell, i) {
+      cell.addEventListener('input', function () {
+        if (cell.value.length > 1) cell.value = cell.value.slice(-1);
+        if (cell.value && cells[i + 1]) cells[i + 1].focus();
+      });
+      cell.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !cell.value && cells[i - 1]) {
+          cells[i - 1].focus();
+          cells[i - 1].value = '';
+          e.preventDefault();
+        }
+      });
+      cell.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var data = ((e.clipboardData || window.clipboardData).getData('text') || '').replace(/\s/g, '');
+        var j = 0;
+        while (j < data.length && j < cells.length) { cells[j].value = data.charAt(j); j++; }
+        (cells[j] || cells[cells.length - 1]).focus();
+      });
+    });
+  }
+
+  function initUpload(panel) {
+    var input = panel.querySelector('.lg-upload__input');
+    var list = panel.querySelector('.lg-upload__list');
+    if (!input || !list) return;
+    var store = new DataTransfer();
+    function fmt(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1048576).toFixed(1) + ' MB';
+    }
+    function render() {
+      list.innerHTML = '';
+      [].forEach.call(store.files, function (file, i) {
+        var li = document.createElement('li');
+        li.className = 'lg-upload__file';
+        li.innerHTML = '<svg class="lg-upload__fileicon" viewBox="0 0 256 256"><use href="#ph-file-text"/></svg>'
+          + '<span class="lg-upload__name"></span>'
+          + '<span class="lg-upload__size"></span>'
+          + '<button type="button" class="lg-upload__remove" aria-label="移除"><svg viewBox="0 0 256 256"><use href="#ph-x"/></svg></button>';
+        li.querySelector('.lg-upload__name').textContent = file.name;
+        li.querySelector('.lg-upload__size').textContent = fmt(file.size);
+        li.querySelector('.lg-upload__remove').addEventListener('click', function (e) {
+          e.stopPropagation();
+          store.items.remove(i);
+          input.files = store.files;
+          render();
+        });
+        list.appendChild(li);
+      });
+    }
+    function add(files) {
+      [].forEach.call(files, function (f) {
+        var dup = [].some.call(store.files, function (g) { return g.name === f.name && g.size === f.size; });
+        if (!dup) store.items.add(f);
+      });
+      input.files = store.files;
+      render();
+    }
+    panel.addEventListener('click', function (e) {
+      if (e.target.closest('.lg-upload__list')) return;
+      input.click();
+    });
+    input.addEventListener('change', function () { add(input.files); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      panel.addEventListener(ev, function (e) { e.preventDefault(); panel.classList.add('is-dragover'); });
+    });
+    panel.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      if (!panel.contains(e.relatedTarget)) panel.classList.remove('is-dragover');
+    });
+    panel.addEventListener('drop', function (e) {
+      e.preventDefault();
+      panel.classList.remove('is-dragover');
+      if (e.dataTransfer) add(e.dataTransfer.files);
     });
   }
 
@@ -1033,7 +1310,9 @@
       var pad = (max - min || Math.abs(max) || 1) * 0.1;
       min -= pad; max += pad;
       if (type === 'bar' && min > 0) min = 0;
-      var px = function (i) { return PL + (W - PL - PR) * (data.length === 1 ? 0.5 : i / (data.length - 1)); };
+      var px = type === 'bar'
+        ? function (i) { return PL + (W - PL - PR) / data.length * (i + 0.5); }   // 長條置中於等寬帶,首尾不被裁切
+        : function (i) { return PL + (W - PL - PR) * (data.length === 1 ? 0.5 : i / (data.length - 1)); };
       var py = function (v) { return PT + (H - PT - PB) * (1 - (v - min) / (max - min)); };
 
       for (var g = 1; g <= 3; g++) {
@@ -1233,7 +1512,18 @@
 
     function boot() {
       [].forEach.call(document.querySelectorAll('[data-lg]'), function (n) { attach(n); });
+      [].forEach.call(document.querySelectorAll('[data-lg-concentric]'), function (n) {
+        applyConcentric(n);
+        if (typeof ResizeObserver === 'undefined') return;
+        var ro = new ResizeObserver(function () { applyConcentric(n); });
+        ro.observe(n);
+        var p = n.parentElement;
+        while (p && !p.classList.contains('lg')) p = p.parentElement;
+        if (p) ro.observe(p);   // 父層尺寸/內距變動也重算
+      });
       [].forEach.call(document.querySelectorAll('.lg-tabs'), initTabs);
+      [].forEach.call(document.querySelectorAll('.lg-otp'), initOtp);
+      [].forEach.call(document.querySelectorAll('[data-lg-upload]'), initUpload);
       [].forEach.call(document.querySelectorAll('input.lg-slider__input'), initSlider);
       [].forEach.call(document.querySelectorAll('.lg-dock'), initDock);
       [].forEach.call(document.querySelectorAll('.lg-switch'), initSwitchTension);
@@ -1246,6 +1536,10 @@
       initSheen();
       ensureGooFilter();
       initPress();
+      initScrollShrink();
+      initScrollEdge();
+      initClearFields();
+      initSteppers();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
