@@ -127,9 +127,11 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
   filter.innerHTML = '<div style="opacity:.6;text-transform:uppercase;font-size:10px;margin-bottom:6px">船型篩選</div>';
   SHIP_CATEGORIES.forEach((cat, i) => {
     const rowEl = document.createElement('label');
-    rowEl.style.cssText = 'display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:12px';
+    rowEl.className = 'lg-check';
+    rowEl.style.cssText = 'margin:3px 0;font-size:12px';
     rowEl.innerHTML = `<input type="checkbox" checked>
-      <span style="width:9px;height:9px;border-radius:50%;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${esc(cat)}`;
+      <span class="lg-check__box"><svg class="lg-check__mark" viewBox="0 0 256 256"><use href="#ph-check"/></svg></span>
+      <span class="lg-check__label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin-right:5px;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${esc(cat)}</span>`;
     const cb = rowEl.querySelector('input') as HTMLInputElement;
     cb.addEventListener('change', () => {
       if (cb.checked) enabled.add(cat); else enabled.delete(cat);
