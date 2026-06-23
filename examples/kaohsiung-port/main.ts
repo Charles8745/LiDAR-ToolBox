@@ -247,19 +247,17 @@ fetch(labelFontUrl, { method: 'HEAD' }).then((r) => {
 engine.start();
 window.addEventListener('resize', () => { fit(); engine.resize(); });
 
-// Overlay (legend / KPI / detail / filter / view toggle / time slider).
-let colorBy: 'type' | 'status' = 'type';
+// Overlay (legend / KPI / detail / filter / backdrop switch / time slider).
 let filter = new Set<string>(SHIP_CATEGORIES);
 let currentMs = nowMs;
 const overlay = createOverlay(document.getElementById('overlay') as HTMLElement, {
   onFilter(enabled) { filter = enabled; refresh(currentMs); },
-  onView(mode) { colorBy = mode; refresh(currentMs); },
   onScrub(tMs) { refresh(tMs); },
   onBackdrop(on) { mapPlane.visible = on; },
 });
 function refresh(tMs: number) {
   currentMs = tMs;
-  updateShips(tMs, colorBy, filter);
+  updateShips(tMs, 'type', filter);
   const inPort = vesselsInPortAt(tracks, tMs);
   overlay.setKpi({ inPort, total: peakInPort });
   overlay.setClock(tMs);

@@ -29,7 +29,6 @@ declare global {
 
 export interface OverlayHandlers {
   onFilter(enabled: Set<string>): void;
-  onView(mode: 'type' | 'status'): void;
   onScrub(tMs: number): void;
   onBackdrop(on: boolean): void;
 }
@@ -139,20 +138,15 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     });
     filter.appendChild(rowEl);
   });
-  let mode: 'type' | 'status' = 'type';
-  const viewBtn = document.createElement('button');
-  viewBtn.className = 'lg lg-btn lg-btn--sm'; viewBtn.setAttribute('data-lg', '');
-  viewBtn.textContent = '檢視:船型 ↔ 狀態';
-  viewBtn.style.cssText = 'margin-top:8px;width:100%';
-  viewBtn.addEventListener('click', () => { mode = mode === 'type' ? 'status' : 'type'; handlers.onView(mode); });
-  filter.appendChild(viewBtn);
-  let bgOn = true;
-  const bgBtn = document.createElement('button');
-  bgBtn.className = 'lg lg-btn lg-btn--sm'; bgBtn.setAttribute('data-lg', '');
-  bgBtn.textContent = '底圖:開';
-  bgBtn.style.cssText = 'margin-top:6px;width:100%';
-  bgBtn.addEventListener('click', () => { bgOn = !bgOn; bgBtn.textContent = `底圖:${bgOn ? '開' : '關'}`; handlers.onBackdrop(bgOn); });
-  filter.appendChild(bgBtn);
+  const bgSwitch = document.createElement('label');
+  bgSwitch.className = 'lg-switch';
+  bgSwitch.style.cssText = 'margin-top:8px;font-size:12px';
+  bgSwitch.innerHTML = `<input type="checkbox" checked>
+    <span class="lg-switch__track"><span class="lg-switch__thumb"></span></span>底圖`;
+  const bgInput = bgSwitch.querySelector('input') as HTMLInputElement;
+  bgInput.addEventListener('change', () => handlers.onBackdrop(bgInput.checked));
+  filter.appendChild(bgSwitch);
+  window.LiquidGlass?.behaviors?.switchTension?.(bgSwitch);
 
   // RIGHT: 24h trend chart
   const chart = card('lg lg-chart', rightRail);
