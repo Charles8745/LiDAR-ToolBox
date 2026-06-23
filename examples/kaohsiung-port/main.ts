@@ -280,18 +280,6 @@ overlay.setIncoming(
 );
 refresh(nowMs);
 
-// 自走回放:每 ~80ms 推進(由 __twin.play()/pause() 控制;預設停)。
-let playTimer = 0;
-function play() {
-  if (playTimer) return;
-  playTimer = window.setInterval(() => {
-    let t = currentMs + (toMs - fromMs) / 600; // 約 50s 掃完全程
-    if (t > toMs) t = fromMs;
-    refresh(t);
-  }, 80);
-}
-function pause() { if (playTimer) { clearInterval(playTimer); playTimer = 0; } }
-
 // Click-to-pick the nearest ship centroid (screen-space).
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -316,7 +304,7 @@ canvas.addEventListener('click', (e) => {
 
 // Dev/verification handles.
 (window as any).__twin = {
-  engine, shipPC, mapPlane, updateShips, refresh, play, pause,
+  engine, shipPC, mapPlane, updateShips, refresh,
   fromMs, toMs, nowMs, peakInPort, tracks, trackMeta,
   layers: Object.fromEntries(layerHandles.map((h) => [h.key, h])),
   labels,
