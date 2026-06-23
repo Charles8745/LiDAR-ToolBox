@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { LidarEngine, PointCloud, buildCategoryLUT } from '../../src/index';
 import { createProjection, KAOHSIUNG_ORIGIN, WORLD_SCALE } from './geo/projection';
 import { sampleShipFootprint, TYPE_DIMS_M } from './scene/portPoints';
+import { loadShipModel, placeModelPoints } from './scene/shipModels';
 import { buildLayers, type LayerConfig } from './scene/layers';
 import { SHIP_CATEGORY_COLORS, STATUS_COLORS, SHIP_CATEGORIES, statusIndex, valueFor, type ShipCategory } from './palette';
 import { createOverlay } from './ui/overlay';
@@ -148,7 +149,16 @@ function updateShips(tMs: number, mode: 'type' | 'status', enabled?: Set<string>
     else { const theta = rp.headingDeg * Math.PI / 180; h = Math.atan2(-Math.cos(theta), Math.sin(theta)); }
     const v01 = mode === 'type' ? valueFor(catIdx, SHIP_CATEGORY_COLORS.length) : statusVal;
     const spacing = loaU > 1.5 * S ? 0.15 * S : 0.3 * S; // 小船降取樣(隨尺度等比)
-    for (const p of sampleShipFootprint(c, loaU, beamU, h, spacing)) { pos.push(p.x, SHIP_Y, p.z); val.push(v01); }
+    const tpl = loadShipModel(meta.category);
+    if (tpl) {
+      const batch = placeModelPoints(tpl, c, h, loaU, SHIP_Y, v01);
+      for (let k = 0; k < batch.positions.length; k += 3) {
+        pos.push(batch.positions[k], batch.positions[k + 1], batch.positions[k + 2]);
+        val.push(batch.values[k / 3]);
+      }
+    } else {
+      for (const p of sampleShipFootprint(c, loaU, beamU, h, spacing)) { pos.push(p.x, SHIP_Y, p.z); val.push(v01); }
+    }
     centers.push({ track: t, vessel: meta.vessel, x: c.x, y: SHIP_Y, z: c.z });
   }
   shipCenters = centers;
