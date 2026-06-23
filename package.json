@@ -17,7 +17,8 @@
     "port:ais:record": "vite-node examples/kaohsiung-port/data/record-ais.ts",
     "port:ais:auto": "bash examples/kaohsiung-port/data/run-ais-record.sh",
     "port:twport:record": "vite-node examples/kaohsiung-port/data/record-twport.ts",
-    "port:berths": "vite-node examples/kaohsiung-port/data/fetch-berths.ts"
+    "port:berths": "vite-node examples/kaohsiung-port/data/fetch-berths.ts",
+    "port:models": "vite-node examples/kaohsiung-port/data/fetch-ship-models.ts"
   },
   "dependencies": {
     "three": "^0.171.0",
