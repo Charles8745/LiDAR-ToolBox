@@ -1,5 +1,6 @@
 import { SHIP_CATEGORIES, SHIP_CATEGORY_COLORS } from '../palette';
 import type { VesselRecord } from '../data/twport';
+import { advancePerFrame } from '../time/playback';
 
 const TAIPEI_MS = 8 * 3600_000;
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -163,15 +164,28 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
 
   // BOTTOM timeline
   const timeline = bar('lg', 'left:14px;right:14px;bottom:14px;height:46px;display:flex;gap:12px;align-items:center;padding:0 14px;border-radius:14px');
+  // Speed stepper (1-10; today's feel = 8 = 80%; default 5). Sits left of ▶.
+  let speedStep = 5;
+  const speed = document.createElement('div');
+  speed.className = 'lg lg-stepper'; speed.setAttribute('data-lg', '');
+  speed.innerHTML = `
+    <button type="button" class="lg-stepper__btn" data-lg-step="-1" aria-label="減速"><svg viewBox="0 0 256 256"><use href="#ph-minus"/></svg></button>
+    <input class="lg-stepper__input" type="number" min="1" max="10" step="1" value="5" aria-label="播放速度">
+    <button type="button" class="lg-stepper__btn" data-lg-step="1" aria-label="加速"><svg viewBox="0 0 256 256"><use href="#ph-plus"/></svg></button>`;
+  const speedInput = speed.querySelector('.lg-stepper__input') as HTMLInputElement;
+  speedInput.addEventListener('input', () => {
+    const n = parseInt(speedInput.value, 10);
+    if (Number.isFinite(n)) speedStep = Math.min(10, Math.max(1, n));
+  });
+
   const play = document.createElement('button');
   play.className = 'lg lg-btn lg-btn--icon'; play.setAttribute('data-lg', '');
-  
   play.textContent = '▶';
   const slider = document.createElement('input');
   slider.type = 'range'; slider.style.flex = '1';
   const tclock = document.createElement('span');
   tclock.style.cssText = 'min-width:96px;text-align:right;font-variant-numeric:tabular-nums';
-  timeline.append(play, slider, tclock);
+  timeline.append(speed, play, slider, tclock);
 
   let playing = false; let timer = 0;
   function stopPlay() { playing = false; play.textContent = '▶'; if (timer) cancelAnimationFrame(timer); }
@@ -181,7 +195,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     playing = !playing; play.textContent = playing ? '⏸' : '▶';
     const stepFn = () => {
       if (!playing) return;
-      let v = +slider.value + (+slider.max - +slider.min) / 600; // ~10s sweep across the range
+      let v = +slider.value + advancePerFrame(+slider.max - +slider.min, speedStep);
       if (v > +slider.max) v = +slider.min;
       slider.value = String(v); handlers.onScrub(v); timer = requestAnimationFrame(stepFn);
     };
