@@ -10,3 +10,9 @@ dist/
 # AIS recorder raw logs (large) + probe samples — only the exported short-window khh-*.json is committed
 examples/kaohsiung-port/data/ais-tracks/raw-khh-*.jsonl
 examples/kaohsiung-port/data/ais-tracks/_probe-sample.json
+
+# Raw 3D model source assets (large GLB/glTF/textures) — only the baked
+# data/ship-models/*.json point clouds are committed. See data/models/CREDITS.md.
+examples/kaohsiung-port/data/models/*
+!examples/kaohsiung-port/data/models/.gitkeep
+!examples/kaohsiung-port/data/models/CREDITS.md

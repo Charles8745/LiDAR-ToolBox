@@ -2,6 +2,7 @@ import type { World } from '../geo/projection';
 import type { ShipCategory } from '../palette';
 import { SHIP_CATEGORIES } from '../palette';
 import type { PointBatch } from './portPoints';
+import containerJson from '../data/ship-models/貨櫃.json';
 
 /** Unit-space model: long axis +x (length 1), x/z centered, min-y=0. Geometry only. */
 export interface ShipModelTemplate { points: Float32Array }
@@ -41,7 +42,7 @@ export function placeModelPoints(
 //   2. import the JSON below and map the category to it.
 // e.g.  import containerJson from '../data/ship-models/貨櫃.json';
 const RAW: Partial<Record<ShipCategory, { points: number[] }>> = {
-  // 貨櫃: containerJson,
+  貨櫃: containerJson,
 };
 
 export const CATEGORY_MODEL_KEYS: Record<ShipCategory, string | null> = Object.fromEntries(

@@ -40,8 +40,18 @@ describe('placeModelPoints', () => {
 });
 
 describe('loadShipModel', () => {
-  it('returns null for categories with no baked model (default state)', () => {
-    expect(loadShipModel('貨櫃')).toBeNull();
+  it('returns a template for a category with a baked model (貨櫃)', () => {
+    const t = loadShipModel('貨櫃');
+    expect(t).not.toBeNull();
+    expect(t!.points).toBeInstanceOf(Float32Array);
+    expect(t!.points.length).toBeGreaterThan(0);
+  });
+
+  it('returns the same cached instance on repeat calls', () => {
+    expect(loadShipModel('貨櫃')).toBe(loadShipModel('貨櫃'));
+  });
+
+  it('returns null for categories with no baked model', () => {
     expect(loadShipModel('其他')).toBeNull();
   });
 });
