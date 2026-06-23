@@ -1,5 +1,8 @@
 export interface Vec3 { x: number; y: number; z: number }
 export interface Triangle { a: Vec3; b: Vec3; c: Vec3 }
+export type Axis = 'x' | 'y' | 'z';
+export interface Bounds { min: Vec3; max: Vec3; center: Vec3 }
+export interface NormalizeOpts { forwardAxis: Axis; upAxis: Axis; signForward?: 1 | -1 }
 
 /** Small fast seeded PRNG → reproducible bakes / stable git diffs. */
 export function mulberry32(seed: number): () => number {
@@ -44,4 +47,58 @@ export function surfaceSample(tris: Triangle[], count: number, rng: () => number
     out[n * 3 + 2] = b0 * t.a.z + b1 * t.b.z + b2 * t.c.z;
   }
   return out;
+}
+
+const AXES: Axis[] = ['x', 'y', 'z'];
+function readAxis(arr: Float32Array, i: number, ax: Axis): number {
+  return arr[i + AXES.indexOf(ax)];
+}
+
+/**
+ * Rotate model so forwardAxis→+x, upAxis→+y (third axis→+z by remap), uniform-scale the
+ * long (x) axis span to 1, then translate to x/z-centered with min-y=0 (keel on y=0).
+ * `bounds` returned is the ORIGINAL input bbox.
+ */
+export function normalizeToUnit(positions: Float32Array, opts: NormalizeOpts): { positions: Float32Array; bounds: Bounds } {
+  const sign = opts.signForward ?? 1;
+  // remaining axis = the one that is neither forward nor up → becomes z
+  const sideAxis = AXES.find((a) => a !== opts.forwardAxis && a !== opts.upAxis)!;
+
+  // Remap into x=forward, y=up, z=side.
+  const remapped = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    remapped[i] = sign * readAxis(positions, i, opts.forwardAxis);
+    remapped[i + 1] = readAxis(positions, i, opts.upAxis);
+    remapped[i + 2] = readAxis(positions, i, sideAxis);
+  }
+
+  // Bounds of remapped to compute scale/translate; original bounds tracked separately.
+  let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMinZ = Infinity, rMaxZ = -Infinity;
+  let oMinX = Infinity, oMinY = Infinity, oMinZ = Infinity, oMaxX = -Infinity, oMaxY = -Infinity, oMaxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    rMinX = Math.min(rMinX, remapped[i]); rMaxX = Math.max(rMaxX, remapped[i]);
+    rMinY = Math.min(rMinY, remapped[i + 1]);
+    rMinZ = Math.min(rMinZ, remapped[i + 2]); rMaxZ = Math.max(rMaxZ, remapped[i + 2]);
+    oMinX = Math.min(oMinX, positions[i]); oMaxX = Math.max(oMaxX, positions[i]);
+    oMinY = Math.min(oMinY, positions[i + 1]); oMaxY = Math.max(oMaxY, positions[i + 1]);
+    oMinZ = Math.min(oMinZ, positions[i + 2]); oMaxZ = Math.max(oMaxZ, positions[i + 2]);
+  }
+  const lenX = rMaxX - rMinX || 1;
+  const scale = 1 / lenX;
+  const cx = (rMinX + rMaxX) / 2, cz = (rMinZ + rMaxZ) / 2;
+
+  const out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    out[i] = (remapped[i] - cx) * scale;
+    out[i + 1] = (remapped[i + 1] - rMinY) * scale; // min-y → 0
+    out[i + 2] = (remapped[i + 2] - cz) * scale;
+  }
+  return {
+    positions: out,
+    bounds: {
+      min: { x: oMinX, y: oMinY, z: oMinZ },
+      max: { x: oMaxX, y: oMaxY, z: oMaxZ },
+      center: { x: (oMinX + oMaxX) / 2, y: (oMinY + oMaxY) / 2, z: (oMinZ + oMaxZ) / 2 },
+    },
+  };
 }
