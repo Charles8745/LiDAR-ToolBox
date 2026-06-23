@@ -27,6 +27,19 @@ html, body { background: #0B0C0E; color: var(--ink); }
 /**/
 #overlay .lg-btn--icon { width: 30px; height: 30px; }        /* ▶ 播放鈕 */
 
+/* --- Compact glass controls for the dense war-room HUD --- */
+/* Filter checkboxes: shrink the toggle + tighten the gap so the semantic
+   category COLOUR dot is the focal point, not the 22px glass ring. */
+#overlay .lg-check { gap: 8px; }
+#overlay .lg-check__box { width: 16px; height: 16px; border-radius: 5px; }
+#overlay .lg-check__mark { inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); }
+/* Checked box fills with light --lg-accent; a white tick on it is invisible —
+   use dark ink for a high-contrast check. */
+#overlay .lg-check input:checked + .lg-check__box .lg-check__mark { color: #0B0C0E; }
+
+/* Stepper +/- glyphs: lift affordance (kit default sits at 62% opacity). */
+#overlay .lg-stepper__btn { color: rgba(238, 242, 249, 0.88); }
+
 @keyframes fade-rise {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }

@@ -130,7 +130,7 @@ export function createOverlay(root: HTMLElement, handlers: OverlayHandlers): Ove
     rowEl.style.cssText = 'display:flex;margin:3px 0;font-size:12px';
     rowEl.innerHTML = `<input type="checkbox" checked>
       <span class="lg-check__box"><svg class="lg-check__mark" viewBox="0 0 256 256"><use href="#ph-check"/></svg></span>
-      <span class="lg-check__label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin-right:5px;background:${rgb(SHIP_CATEGORY_COLORS[i])}"></span>${esc(cat)}</span>`;
+      <span class="lg-check__label"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:middle;margin-right:7px;background:${rgb(SHIP_CATEGORY_COLORS[i])};box-shadow:0 0 6px ${rgb(SHIP_CATEGORY_COLORS[i])}66"></span>${esc(cat)}</span>`;
     const cb = rowEl.querySelector('input') as HTMLInputElement;
     cb.addEventListener('change', () => {
       if (cb.checked) enabled.add(cat); else enabled.delete(cat);
