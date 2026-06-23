@@ -14,20 +14,22 @@ const OUT_DIR = join(HERE, 'ship-models');
 interface BakeCfg {
   forwardAxis: Axis; upAxis: Axis; signForward: 1 | -1; seed: number;
   sampling: 'surface' | 'slice';
-  count: number;              // 'surface': total points (area-weighted)
+  count: number;              // 'slice': downsample cap; 'surface': total points (area-weighted)
   layers: number;             // 'slice': number of cut planes along upAxis
   stepFrac: number;           // 'slice': point spacing along cut lines = stepFrac × bbox diagonal
 }
-// 'surface' = area-weighted dots over the whole hull (looks like a fuzzy cloud at low counts).
-// 'slice'   = contour scan-lines: cut the mesh with `layers` horizontal planes (along upAxis) and
-//             dot the intersection lines → hull lines + container-stack grid → reads as a ship.
+// DEFAULT = 'slice' (contour scan-lines): cut the mesh with `layers` horizontal planes along upAxis,
+// dot the intersection lines → hull lines + container-stack grid → reads as a ship, very LiDAR-like.
+// ('surface' = area-weighted dots over the whole hull — kept as a code path but no longer used; it
+//  looks like a fuzzy blob at low counts.)
 const DEFAULT_CFG: BakeCfg = {
   forwardAxis: 'x', upAxis: 'y', signForward: 1, seed: 1,
-  sampling: 'surface', count: 300, layers: 40, stepFrac: 0.012,
+  sampling: 'slice', count: 2500, layers: 44, stepFrac: 0.013,
 };
-// Per-source overrides keyed by filename without extension. Adjust forward/up/sampling after eyeballing.
+// Per-source overrides keyed by filename without extension. Adjust forward/up/layers after eyeballing;
+// 貨櫃 just uses the slice defaults. Set sampling:'surface' here only if a model genuinely needs it.
 const MODEL_BAKE_CONFIG: Record<string, Partial<BakeCfg>> = {
-  貨櫃: { sampling: 'slice', layers: 44, stepFrac: 0.013, count: 2500 }, // contour scan, capped to 2500 pts
+  // 例:油品: { layers: 36 },   軍艦: { forwardAxis: 'z' },
 };
 
 function parseGlb(buf: ArrayBuffer): Promise<Group> {
