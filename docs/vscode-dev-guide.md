@@ -401,7 +401,7 @@ pyftsubset NotoSansTC-Regular.otf \
 
 > **怎麼定 `forwardAxis`/`upAxis`(實戰最可靠做法)**:**先量原始幾何的世界 bbox** —— `collectTriangles(scene)` 後算 x/y/z span,**最長軸=`forwardAxis`(船長)、垂直軸=`upAxis`**。光在瀏覽器目視會被騙:`normalizeToUnit` 會把 `forwardAxis` 硬塞成 x 並縮放成長度 1,所以**即使 `forwardAxis` 設錯,船的「形狀」仍對(等比保留),只是被旋轉 90° + 沿垂直方向放大成 ~8×LOA** —— 總覽會看到「過大、糊成發光毯」的船。**驗證捷徑**:烘出後看 `ship-models/<船型>.json` 的 x/y/z span,正確時 **x≈1(最長)、y/z 都 <1**;若 z 遠大於 1 → `forwardAxis` 指到了寬邊(改成 `'z'` 重烘)。
 >
-> **實例(本專案 7 模型)**:`貨櫃` 是 length-along-**x**(預設可用);其餘 6 個 Sketchfab 模型(油品/散雜/LNG/工作/軍艦/客運)都是 length-along-**z** → 在 `MODEL_BAKE_CONFIG` 各加 `forwardAxis: 'z'`(`upAxis` 維持 `'y'`,Sketchfab Y-up)。一次性量軸工具:臨時寫個 script 用 `collectTriangles` 印各模型 raw bbox span(用完即刪)。
+> **實例(本專案 8 模型)**:`貨櫃` 是 length-along-**x**(預設可用);其餘 7 個 Sketchfab 模型(油品/散雜/LNG/工作/軍艦/客運/**遊艇**)都是 length-along-**z** → 在 `MODEL_BAKE_CONFIG` 各加 `forwardAxis: 'z'`(`upAxis` 維持 `'y'`,Sketchfab Y-up)。一次性量軸工具:臨時寫個 script 用 `collectTriangles` 印各模型 raw bbox span(用完即刪)。
 
 **② 執行期旋鈕**
 
@@ -413,7 +413,7 @@ pyftsubset NotoSansTC-Regular.otf \
 | 顏色 | 不在模型裡 | 執行期依船型 palette(`updateShips` 的 `mode`)上色,**模型只存幾何** |
 | 旋轉/縮放邏輯 | `shipModels.ts` `placeModelPoints` | 等比 ×LOA、heading 旋轉,慣例對齊 `sampleShipFootprint`(**別動**) |
 
-> **點數預算**:`shipPC` capacity = **1.5M**([main.ts](../examples/kaohsiung-port/main.ts) 約 120 行,8 類中 7 類有模型後自 300k 拉高),RingBuffer 滿了覆蓋最舊。每幀預算 = Σ(可見船點數),`updateShips` **每幀重建整層**(scrub/播放都會跑),所以總點數同時吃 GPU 與每幀 CPU/GC。各模型烘後點數:貨櫃 5.5k、工作 4.9k、LNG 2.5k、散雜 2.0k、軍艦 2.0k、油品/客運 1.4k,平面 fallback(其他)≈39。**實測尖峰**:在港 354 艘 → 約 **980k 點**(`__twin.shipPC.points.geometry.drawRange.count` 量)。**若再加密或船更多、尖峰逼近 capacity → 把 `cellFrac` 調大降密度,或調高 capacity**。注意 `forwardAxis` 設錯會讓船膨脹成 ~8×LOA、點數暴增到數萬(見上方軸向說明)。
+> **點數預算**:`shipPC` capacity = **1.5M**([main.ts](../examples/kaohsiung-port/main.ts) 約 120 行,有模型船型多後自 300k 拉高),RingBuffer 滿了覆蓋最舊。每幀預算 = Σ(可見船點數),`updateShips` **每幀重建整層**(scrub/播放都會跑),所以總點數同時吃 GPU 與每幀 CPU/GC。各模型烘後點數:貨櫃 5.5k、工作 4.9k、LNG 2.5k、散雜 2.0k、軍艦 2.0k、油品/客運 1.4k、**遊艇 1.2k**,平面 fallback(工程/其他)≈39。**實測尖峰**:在港 354 艘 → 約 **980k 點**(`__twin.shipPC.points.geometry.drawRange.count` 量)。**若再加密或船更多、尖峰逼近 capacity → 把 `cellFrac` 調大降密度,或調高 capacity**。注意 `forwardAxis` 設錯會讓船膨脹成 ~8×LOA、點數暴增到數萬(見上方軸向說明)。
 
 **③ 完整流程(加一個新船型)**
 
@@ -490,7 +490,7 @@ AIS type code 對映更新:`mapAisTypeToCategory`(在 `data/ais.ts`)現在也覆
 - 類型碼 33/34 → 工程、36/37 → 遊艇(ITU-R M.1371)
 - 12 個官方船型名稱(`TYPE_TO_CATEGORY`)直接映射
 
-> **遊艇/工程 的 3D 模型**:目前無模型,自動 fallback 回平面 footprint(§4k 管線相同;缺模型不影響其他船型)。要加模型時按 §4k 完整流程即可。
+> **遊艇/工程 的 3D 模型**:`遊艇` 已有模型(§4k;CC-BY-NC「Frickie's Yacht」,`forwardAxis:'z'`、`cellFrac 0.024`→1237 點)。`工程` 仍無模型 → 自動 fallback 回平面 footprint;要加按 §4k 完整流程即可(缺模型不影響其他船型)。
 
 ---
 

@@ -30,7 +30,7 @@ const DEFAULT_CFG: BakeCfg = {
 };
 // Per-source overrides keyed by filename without extension. Adjust forward/up/layers after eyeballing;
 // 貨櫃 just uses the slice defaults. Set sampling:'surface' here only if a model genuinely needs it.
-// These 6 source models are authored length-along-Z (raw bbox: longest axis = z; 貨櫃 alone is
+// These 7 source models are authored length-along-Z (raw bbox: longest axis = z; 貨櫃 alone is
 // length-along-x) → forwardAxis:'z'. Without it the ship bakes rotated 90° and ~8× oversized.
 // upAxis stays 'y' (Sketchfab Y-up). cellFrac evens on-screen density toward 貨櫃's proven look.
 // Verified raw axes via data/_axes-probe.ts; see §4k.
@@ -41,6 +41,8 @@ const MODEL_BAKE_CONFIG: Record<string, Partial<BakeCfg>> = {
   油品: { forwardAxis: 'z', cellFrac: 0.014 },
   工作: { forwardAxis: 'z', cellFrac: 0.028 },
   軍艦: { forwardAxis: 'z', cellFrac: 0.014 },
+  // 遊艇 (CC-BY-NC yacht): length-along-z; cellFrac 0.024 → ~1237 pts (kept under 1500 budget).
+  遊艇: { forwardAxis: 'z', cellFrac: 0.024 },
 };
 
 function parseGlb(buf: ArrayBuffer): Promise<Group> {

@@ -54,5 +54,16 @@ This work is based on **"Cruise Ship"**
 by **farhad.Guli** (https://sketchfab.com/farhad.Guli) licensed under **CC-BY-4.0**
 (http://creativecommons.org/licenses/by/4.0/).
 
+## 遊艇 (yacht) → `../ship-models/遊艇.json`
+
+> ⚠️ **Non-commercial license (CC-BY-NC-4.0)** — the only NC-licensed model here;
+> every other model is CC-BY-4.0 (commercial-OK). The baked point cloud is a
+> derivative work and inherits the NC restriction: **no commercial use**.
+
+This work is based on **"Frickie's Yacht"**
+(https://sketchfab.com/3d-models/frickies-yacht-a5b72f2a23cd4e1f9eaf49059606c7a3)
+by **KurumA** (https://sketchfab.com/rubenn) licensed under **CC-BY-NC-4.0**
+(http://creativecommons.org/licenses/by-nc/4.0/).
+
 Baked via `npm run port:models` (geometry-only contour-slice + voxel sampling →
 normalized templates; textures/materials stripped before sampling).
