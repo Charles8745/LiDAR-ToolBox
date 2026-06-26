@@ -1,6 +1,7 @@
 // examples/kaohsiung-port/scene/viewCarving.ts
-// Used in Task 3 (voxel carving); import retained for forward compatibility.
-// @ts-ignore – intentionally forward-referenced; will be consumed in Task 3
+// normalizeToUnit/voxelDownsample are consumed in Task 3 (carveToTemplate). Until then this import
+// is unused; @ts-expect-error self-enforces removal of this line once Task 3 wires them in.
+// @ts-expect-error TS6192 forward-referenced import; delete this directive when the functions are used
 import { normalizeToUnit, voxelDownsample } from './meshSampling';
 
 export interface Mask { data: Uint8Array; w: number; h: number }
