@@ -228,6 +228,8 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
   if (code >= 70 && code <= 79) return '散雜';
   if (code >= 60 && code <= 69) return '客運';
   if (code === 35) return '軍艦';
+  if (code === 33 || code === 34) return '工程';
+  if (code === 36 || code === 37) return '遊艇';
   if ((code >= 30 && code <= 32) || (code >= 50 && code <= 59)) return '工作';
   return '其他';
 }

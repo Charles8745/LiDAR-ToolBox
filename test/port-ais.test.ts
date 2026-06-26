@@ -260,3 +260,20 @@ describe('refilterTracksFile', () => {
     expect(Object.values(dropped).reduce((a, b) => a + b, 0)).toBe(0);
   });
 });
+
+describe('mapAisTypeToCategory new codes', () => {
+  it('maps dredging/underwater (33,34) to 工程', () => {
+    expect(mapAisTypeToCategory(33)).toBe('工程');
+    expect(mapAisTypeToCategory(34)).toBe('工程');
+  });
+  it('maps sailing/pleasure (36,37) to 遊艇', () => {
+    expect(mapAisTypeToCategory(36)).toBe('遊艇');
+    expect(mapAisTypeToCategory(37)).toBe('遊艇');
+  });
+  it('still maps fishing/tug (30-32,50-59) to 工作 and 90/0 to 其他', () => {
+    expect(mapAisTypeToCategory(30)).toBe('工作');
+    expect(mapAisTypeToCategory(52)).toBe('工作');
+    expect(mapAisTypeToCategory(90)).toBe('其他');
+    expect(mapAisTypeToCategory(0)).toBe('其他');
+  });
+});
