@@ -225,7 +225,7 @@ describe('buildTracksFile non-vessel filtering', () => {
   it('drops non-vessel pings and records the count in meta', () => {
     const out = buildTracksFile([
       ping({ mmsi: '416005912', name: 'REAL SHIP', aisType: 70, lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),   // keep
-      ping({ mmsi: '994160462', name: 'BUOY4314601', aisType: 0, lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),  // drop: aton
+      ping({ mmsi: '994160462', name: 'BUOY4314601', aisType: 0, lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),  // drop: aton (99x MMSI)
       ping({ mmsi: '416005111', name: '5897-07-93%', aisType: 0, lat: 22.60, lon: 120.30, recordedAtMs: 1000 }),  // drop: buoy-name
     ]);
     expect(out.ships.map((s) => s.mmsi)).toEqual(['416005912']);

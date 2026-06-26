@@ -465,7 +465,7 @@ npm run port:models      # → data/ship-models/<船型>.json
 npm run port:ais:refilter   # 重新過濾所有 khh-*.json(idempotent)
 ```
 
-`buildTracksFile`(由 `port:ais:export` 呼叫)也**自動過濾非船目標**,並在輸出 JSON 的 `meta.droppedNonVessel` 記錄各分類的丟棄計數——往後新錄的 raw 資料直接就乾淨。
+`buildTracksFile`(由 `port:ais:export` 呼叫)也**自動過濾非船目標**,並在輸出 JSON 的 `meta.droppedNonVessel` 記錄各分類的丟棄計數——往後新錄的 raw 資料直接就乾淨。`meta.droppedNonVessel` 記錄的是**本次執行**的丟棄數(重烘一個已乾淨的檔案會顯示 `0`),並非累計歷史總數——每次執行的丟棄明細請見 CLI/console 輸出及 commit 記錄。
 
 **目前資料(2026-06-19 / 2026-06-18 重烘後)**:
 

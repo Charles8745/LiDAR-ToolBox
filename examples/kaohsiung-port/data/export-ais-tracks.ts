@@ -28,4 +28,4 @@ const out = buildTracksFile(pings);
 const date = file.replace('raw-khh-', '').replace('.jsonl', '');
 const outPath = resolve(dir, `khh-${date}.json`);
 writeFileSync(outPath, JSON.stringify(out));
-console.log(`wrote ${outPath}: ${out.ships.length} ships, ${new Date(out.meta.fromMs).toISOString()}–${new Date(out.meta.toMs).toISOString()}`);
+console.log(`wrote ${outPath}: ${out.ships.length} ships, ${new Date(out.meta.fromMs).toISOString()}–${new Date(out.meta.toMs).toISOString()}, dropped ${out.meta.droppedNonVessel} non-vessel`);
