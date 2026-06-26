@@ -33,7 +33,7 @@
   - `AxisKey = 'length' | 'beam' | 'height'`。
   - `ViewKind = 'front' | 'stern' | 'side' | 'side2' | 'top' | 'bottom'`。
   - `GridDims = { nx: number; ny: number; nz: number }`(x=beam、y=height、z=length)。
-- **`extractSilhouette(rgba: Uint8Array, w: number, h: number, opts: { bgTolerance: number }): Mask`**
+- **`extractSilhouette(rgba: Uint8Array, w: number, h: number, bgTolerance: number): Mask`**(positional `bgTolerance`)
   - 取四角像素中位數當背景色;從**所有邊框像素** flood-fill(4 鄰接),凡與背景色距離 ≤ `bgTolerance`(在 RGB 歐氏距離)且連到邊框者標記為背景(0);其餘為前景(1)。
   - 效果:船內被前景包住的同色洞(窗/縫)保留為實心;**開放到邊框背景**的縫(如桁架腿間)會被雕掉(正確)。
 - **`robustExtent(mask: Mask, coverFrac: number): { x0,x1,y0,y1 }`** —— 取**穩健 bbox**:只計入「該列/行前景像素數 ≥ `coverFrac × 該列/行長度」的列與行,**忽略 1–2px 寬的桅杆/天線/突出的吸料臂**(預設 `coverFrac` ~0.02)。避免細突出物撐大 bbox 害比例失真。
@@ -45,7 +45,7 @@
 - **`carveVisualHull(masks, dims: GridDims, frontMaskMaxHeightFrac: number): Uint8Array`**(回傳 `nx*ny*nz` 佔用格)
   - 對每體素 `(ix,iy,iz)` 算正規化 `(ux,uy,uz)∈[0,1)`,取樣:`side[uz,uy] ∧ top[uz,ux] ∧ frontConstraint`。三者皆 1 → 實心。
   - **front 只約束船殼(防雙塔幻影)**:`frontConstraint = (uy ≤ frontMaskMaxHeightFrac) ? front[ux,uy] : 1`。即 front/stern 剪影**只在甲板高度以下生效**(雕出船殼 V 底與舷側);甲板**以上的高結構(駕駛台/排料塔)改由 `side × top` 的盒狀包絡雕出**。這移除了「兩端高塔互相投影到對方站位」的 visual-hull 幻影(見「限制」)。`frontMaskMaxHeightFrac` 預設 ~0.45,可調。
-  - 方向約定:bow 在 +z、port 在 +x、deck 在 +y;每張輸入遮罩依其 `ViewKind` 做確定性翻轉對齊(stern 沿 z 鏡像後與 front 聯集;side2 沿 z 鏡像後與 side 聯集;bottom 沿 z 鏡像後與 top 聯集)。**注意**:front/stern 聯集只取「甲板以下船殼」部分故安全;不會把兩端塔的剪影混入。
+  - 方向約定:bow 在 +z、port 在 +x、deck 在 +y;每張次要視圖依其 `ViewKind` 用 `mirrorX`(翻影像**寬**軸)對齊主視圖後聯集——`stern` 寬=beam → mirrorX 翻 beam;`side2`/`bottom` 寬=length → mirrorX 翻 length。三者都是「相反視角」的正確對齊。**注意**:front/stern 聯集只在「甲板以下船殼」生效(`frontMaskMaxHeightFrac`),不會把兩端塔的剪影混入。
 - **`surfaceShell(grid: Uint8Array, dims: GridDims): Float32Array`**
   - 只留「至少一個 6-鄰居為空(或在格邊)」的實心體素,輸出其**中心點**座標(格座標:x∈beam、y∈height、z∈length)→ 中空殼,點數低、像掃描表面。
 
@@ -59,7 +59,7 @@
 - **重用** `meshSampling`:`normalizeToUnit(shellPts, { forwardAxis:'z', upAxis:'y' })`(格子 length=z、height=y、beam=x,天生對齊)→ `voxelDownsample(cellFrac)` 控密度/點數。
 - 寫 `data/ship-models/<船型>.json`,形狀對齊 GLB 路徑:`{ sourceFile:'models/views/<船型>', sampledAt, sampling:'visual-hull', count, lengthM:null, forwardAxis:'z', points:number[] }`(`lengthM` 無真實尺度 → null;執行期 `placeModelPoints` 只用 `points`、依各船 LOA 縮放,故 `lengthM` 僅資訊性)。
 
-`VIEW_BAKE_CONFIG['工程']` 旋鈕:`gridLong`(雕刻解析度,預設 160)、`bgTolerance`(去背閾值)、`coverFrac`(穩健 bbox 的列/行前景覆蓋門檻,預設 ~0.02)、`frontMaskMaxHeightFrac`(front 剪影生效的甲板高度上限,預設 ~0.45 → 防雙塔幻影)、`cellFrac`(最終密度→點數,調到 ~1.3k)、`unionPerAxis`、`signForward`(bow 朝向反了就翻)、以及必要時的 per-view 手動翻轉/單張覆寫。
+`VIEW_BAKE_CONFIG['工程']` 旋鈕:`gridLong`(雕刻解析度,預設 160)、`bgTolerance`(去背閾值,預設 ~32)、`coverFrac`(穩健 bbox 覆蓋門檻,預設 ~0.02)、`frontMaskMaxHeightFrac`(front 生效的甲板高度上限,預設 ~0.45 → 防雙塔幻影)、`cellFrac`(最終密度→點數,預設 ~0.022,須 50–1500)、`minPoints`(退化雕刻下限,低於即丟錯)、`signForward`(bow 反向就翻——**只翻 length 軸,會連帶鏡像 port/starboard**;對稱挖泥船無感,非對稱船請改用 `perView` 旋轉重拍)、`perView`(每視圖 `rotate`/`flipX`/`flipY` 覆寫,救拍歪的視圖)。次要視圖一律自動聯集(無 `unionPerAxis` 開關)。
 
 ### 3. 接線 — `scene/shipModels.ts`(改 1 處)
 
