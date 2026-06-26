@@ -1,5 +1,7 @@
 // test/port-view-carving.test.ts
 import { describe, it, expect } from 'vitest';
+import { vi } from 'vitest';
+import { sampleMask, unionMask, registerGrid, type GridDims } from '../examples/kaohsiung-port/scene/viewCarving';
 import {
   extractSilhouette, robustExtent, cropToContent, mirrorX, flipY, rotate90, applyOrient, type Mask,
 } from '../examples/kaohsiung-port/scene/viewCarving';
@@ -74,5 +76,44 @@ describe('rotate90 / applyOrient', () => {
     const m: Mask = { data: new Uint8Array([1,0,0, 0,0,0]), w:3, h:2 };
     const out = applyOrient(m, { rotate: 0, flipX: true });
     expect(Array.from(out.data)).toEqual([0,0,1, 0,0,0]);
+  });
+});
+
+export function solid(w: number, h: number): Mask { return { data: new Uint8Array(w*h).fill(1), w, h }; }
+
+describe('sampleMask', () => {
+  it('returns 1 inside, 0 out of [0,1)', () => {
+    const m = solid(10,10);
+    expect(sampleMask(m, 0.5, 0.5)).toBe(1);
+    expect(sampleMask(m, -0.1, 0.5)).toBe(0);
+    expect(sampleMask(m, 1.0, 0.5)).toBe(0);
+  });
+});
+
+describe('unionMask', () => {
+  it('ORs b (resampled) into a', () => {
+    const a: Mask = { data: new Uint8Array(4*4), w:4, h:4 };
+    const u = unionMask(a, solid(8,8));
+    expect(u.w).toBe(4); expect(u.h).toBe(4);
+    expect(Array.from(u.data).every((v) => v === 1)).toBe(true);
+  });
+});
+
+describe('registerGrid', () => {
+  it('anchors length to gridLong and derives beam/height from aspect ratios', () => {
+    const d: GridDims = registerGrid(solid(200,50), solid(200,40), solid(32,40), 160);
+    expect(d.nz).toBe(160); expect(d.ny).toBe(40); expect(d.nx).toBe(32);
+  });
+  it('warns when front aspect is inconsistent with side+top', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    registerGrid(solid(200,50), solid(200,40), solid(60,40), 160); // front 1.5 vs derived 0.8
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+  it('does not warn for consistent aspects', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    registerGrid(solid(200,50), solid(200,40), solid(32,40), 160); // front 0.8 == derived 0.8
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

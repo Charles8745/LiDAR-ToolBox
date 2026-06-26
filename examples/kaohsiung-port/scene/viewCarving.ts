@@ -98,3 +98,36 @@ export function applyOrient(mask: Mask, o: Orient): Mask {
   if (o.flipY) m = flipY(m);
   return m;
 }
+
+export interface GridDims { nx: number; ny: number; nz: number } // x=beam, y=height, z=length
+
+export function sampleMask(m: Mask, u: number, v: number): number {
+  if (u < 0 || u >= 1 || v < 0 || v >= 1) return 0;
+  const x = Math.min(m.w - 1, Math.floor(u * m.w));
+  const y = Math.min(m.h - 1, Math.floor(v * m.h));
+  return m.data[y * m.w + x];
+}
+
+/** Union b onto a's pixel grid (nearest resample) then OR. Caller mirror-aligns b first. */
+export function unionMask(a: Mask, b: Mask): Mask {
+  const out = new Uint8Array(a.w * a.h);
+  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) {
+    const u = (x + 0.5) / a.w, v = (y + 0.5) / a.h;
+    out[y * a.w + x] = (a.data[y * a.w + x] || sampleMask(b, u, v)) ? 1 : 0;
+  }
+  return { data: out, w: a.w, h: a.h };
+}
+
+/** length(z)=gridLong; height(y),beam(x) from side/top aspect ratios. front aspect is a consistency
+ *  check only (warns on perspective/scale mismatch). side.w=length, side.h=height; top.w=length, top.h=beam. */
+export function registerGrid(side: Mask, top: Mask, front: Mask, gridLong: number): GridDims {
+  const nz = gridLong;
+  const ny = Math.max(1, Math.round(gridLong * side.h / side.w));
+  const nx = Math.max(1, Math.round(gridLong * top.h / top.w));
+  const frontAspect = front.w / front.h;          // beam/height
+  const derived = nx / ny;
+  if (derived > 0 && Math.abs(frontAspect - derived) / derived > 0.35) {
+    console.warn(`registerGrid: front beam/height ${frontAspect.toFixed(2)} vs side+top-derived ${derived.toFixed(2)} — perspective/scale mismatch (continuing length-anchored)`);
+  }
+  return { nx, ny, nz };
+}
