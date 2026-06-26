@@ -48,6 +48,8 @@ export const TYPE_DIMS_M = {
   '工作': { loa: 40, beam: 12 },
   '軍艦': { loa: 130, beam: 16 },
   '客運': { loa: 200, beam: 32 },
+  '遊艇': { loa: 30, beam: 8 },
+  '工程': { loa: 90, beam: 20 },
   '其他': { loa: 120, beam: 20 },
 } satisfies Record<ShipCategory, { loa: number; beam: number }>;
 

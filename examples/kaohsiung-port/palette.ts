@@ -1,6 +1,6 @@
 import type { RGB } from '../../src/core/types';
 
-export const SHIP_CATEGORIES = ['貨櫃', '油品', '散雜', 'LNG', '工作', '軍艦', '客運', '其他'] as const;
+export const SHIP_CATEGORIES = ['貨櫃', '油品', '散雜', 'LNG', '工作', '軍艦', '客運', '遊艇', '工程', '其他'] as const;
 export type ShipCategory = typeof SHIP_CATEGORIES[number];
 
 const TYPE_TO_CATEGORY: Record<string, ShipCategory> = {
@@ -22,6 +22,8 @@ export const SHIP_CATEGORY_COLORS: RGB[] = [
   [230, 120, 180], // 工作 pink
   [85, 190, 110],  // 軍艦 green
   [60, 195, 200],  // 客運 teal
+  [235, 205, 95],  // 遊艇 warm yellow
+  [160, 175, 95],  // 工程 olive
   [180, 185, 195], // 其他 grey
 ];
 
