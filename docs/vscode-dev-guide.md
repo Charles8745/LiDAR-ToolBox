@@ -490,7 +490,47 @@ AIS type code 對映更新:`mapAisTypeToCategory`(在 `data/ais.ts`)現在也覆
 - 類型碼 33/34 → 工程、36/37 → 遊艇(ITU-R M.1371)
 - 12 個官方船型名稱(`TYPE_TO_CATEGORY`)直接映射
 
-> **遊艇/工程 的 3D 模型**:`遊艇` 已有模型(§4k;CC-BY-NC「Frickie's Yacht」,`forwardAxis:'z'`、`cellFrac 0.024`→1237 點)。`工程` 仍無模型 → 自動 fallback 回平面 footprint;要加按 §4k 完整流程即可(缺模型不影響其他船型)。
+> **遊艇/工程 的 3D 模型(現皆已上線)**:`遊艇` 走 GLB 管線(§4k;CC-BY-NC「Frickie's Yacht」,`forwardAxis:'z'`、`cellFrac 0.024`→1237 點)。`工程` 走**多視圖管線**(§4m;使用者自製挖泥船,6 張軸向截圖雕刻,1230 點)。10 類中只剩 `其他` 用平面 fallback。
+
+### 4m. 多視圖截圖 → 點雲(Visual-Hull 體素雕刻)—— 沒有 3D 模型時的建船法
+
+當某船型**找不到免費 3D 模型**,只有幾張軸向視圖截圖/三視圖時用這條管線。原理:把每張視圖當「剪影」,在 3D 體素網格裡取三軸剪影交集(正投影 visual hull)→ 表面殼 → 點雲。**輸出與 §4k 同款 `data/ship-models/<船型>.json`,接同一個 `RAW` 與執行期。引擎 `src/` 零改動。**
+
+**檔案分工**
+
+| 檔案 | 角色 |
+|---|---|
+| `examples/kaohsiung-port/data/models/views/<船型>/*.png` | 原始截圖(**git-ignored**,被 `models/*` 涵蓋);依檔名歸視圖 |
+| `examples/kaohsiung-port/data/scan-views.ts` | library:`sharp` 去碼 + `classifyView` + `bakeCategory` + `DEFAULT_CFG`/`VIEW_BAKE_CONFIG`(**所有旋鈕**);**無 self-call** |
+| `examples/kaohsiung-port/data/scan-views.cli.ts` | 薄 CLI entry(`npm run port:scan-views` 指這支)|
+| `examples/kaohsiung-port/scene/viewCarving.ts` | 純邏輯:剪影/裁切/orient/sample/union/register/carve/shell/assemble/template(完整單元測試)|
+| `examples/kaohsiung-port/data/ship-models/<船型>.json` | 烘出的點雲模板(**這個才 commit**)|
+
+**完整流程(加一個新船型)**
+
+```bash
+# 1. 從 3D 網站對模型轉到 6 個軸向各截一張圖(單一背景最好),命名後丟入：
+#    data/models/views/<船型>/{front,stern,side,side2,top,bottom}.png
+#    (檔名關鍵字 → 視圖:front/bow、stern/aft、side/port、starboard/side2、top/deck、bottom/hull)
+#    最少需要 front + side + top 三張(其餘是相反方向,有就自動聯集成保守包絡)。
+npm run port:scan-views      # → data/ship-models/<船型>.json
+# 2. 在 scene/shipModels.ts：import 該 JSON + 加進 RAW（同遊艇/§4k）。
+# 3. npm run dev 看；不滿意 → 調 VIEW_BAKE_CONFIG[船型] 重跑。
+```
+
+**旋鈕(`VIEW_BAKE_CONFIG['<船型>']`,覆寫 `DEFAULT_CFG`)**
+
+| 屬性 | 說明 / 預設 |
+|---|---|
+| `cellFrac` | **主密度旋鈕**:voxel 邊長(正規化空間)。**調大=更稀更少點**。預設 `0.022`(工程 0.024→1230 點)。**點數須 ≤1500** |
+| `gridLong` | 雕刻解析度(最長軸格數)。預設 `160` |
+| `bgTolerance` | 去背 chroma-key 色距閾值。預設 `32`。**船被吃掉→調小;背景殘留→調大** |
+| `coverFrac` | 穩健 bbox 的列/行前景覆蓋門檻(忽略細突出)。預設 `0.02` |
+| `frontMaskMaxHeightFrac` | front 剪影生效的甲板高度上限。預設 `0.45` → **防雙塔幻影**(甲板以上的塔改由 side×top 盒狀雕)。中段出現幻影高結構→調小 |
+| `signForward` | bow 朝向反了設 `-1`;**注意只翻 length 軸 → 會鏡像 port/starboard**(對稱船無感,非對稱船改用 `perView` 重拍)|
+| `perView` | 每視圖 `{ rotate?:0/90/180/270; flipX?; flipY? }` 覆寫,救拍歪/直立的視圖 |
+
+> **陷阱**:① **vite-node 下 CLI 不能用 `import.meta.url===file://${process.argv[1]}` run-guard**(永遠 false,會靜默不執行)→ 所以拆成 lib(`scan-views.ts`,無 self-call)+ 薄 entry(`scan-views.cli.ts`,無條件 `main()`),npm script 指 `.cli.ts`。② 原始截圖 git-ignored(`models/*`),只 commit 烘出的 `ship-models/*.json`。③ visual-hull 是**外殼包絡**:細吸料管/桁架/桅杆會丟失(港區尺度點雲本就看不清,可接受);只能還原剪影看得到的外型,內凹/非分離凹形不行。
 
 ---
 
