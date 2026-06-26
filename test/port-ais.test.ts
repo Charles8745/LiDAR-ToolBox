@@ -233,3 +233,30 @@ describe('buildTracksFile non-vessel filtering', () => {
     expect(out.meta.droppedNonVessel).toBe(2);
   });
 });
+
+import { refilterTracksFile } from '../examples/kaohsiung-port/data/ais';
+
+const track = (mmsi: string, name: string, aisType: number) => ({
+  mmsi, imo: '', callSign: '', name, aisType, path: [[22.6, 120.3, 1, -1]] as [number, number, number, number][],
+});
+
+describe('refilterTracksFile', () => {
+  const dirty = {
+    meta: { fromMs: 1, toMs: 2, count: 3, bbox: { s: 22.5, n: 22.66, w: 120.24, e: 120.4 }, droppedNonVessel: 0 },
+    ships: [track('416005912', 'REAL', 70), track('994160462', 'BUOY1', 0), track('416005111', 'X-07-93%', 0)],
+  };
+  it('removes non-vessels and tallies reasons', () => {
+    const { file, dropped } = refilterTracksFile(dirty);
+    expect(file.ships).toHaveLength(1);
+    expect(file.meta.count).toBe(1);
+    expect(file.meta.droppedNonVessel).toBe(2);
+    expect(dropped.aton).toBe(1);
+    expect(dropped['buoy-name']).toBe(1);
+  });
+  it('is idempotent on already-clean data', () => {
+    const { file } = refilterTracksFile(dirty);
+    const { file: again, dropped } = refilterTracksFile(file);
+    expect(again.ships).toHaveLength(1);
+    expect(Object.values(dropped).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+});

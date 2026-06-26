@@ -232,6 +232,24 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
   return '其他';
 }
 
+/** Re-filter an already-aggregated tracks file: drop non-vessels, recompute
+ *  meta counts, return per-reason tally. Idempotent. Used by the refilter CLI
+ *  to clean committed khh-*.json without re-processing raw .jsonl. */
+export function refilterTracksFile(
+  file: AisTracksFile,
+): { file: AisTracksFile; dropped: Record<NonVesselReason, number> } {
+  const dropped: Record<NonVesselReason, number> = {
+    'aton': 0, 'handheld-sart': 0, 'sar-aircraft': 0, 'anomalous-mmsi': 0, 'buoy-name': 0, 'garbled': 0,
+  };
+  const ships = file.ships.filter((s) => {
+    const c = classifyAisTarget(s);
+    if (!c.vessel && c.reason) dropped[c.reason]++;
+    return c.vessel;
+  });
+  const droppedNonVessel = file.ships.length - ships.length;
+  return { file: { meta: { ...file.meta, count: ships.length, droppedNonVessel }, ships }, dropped };
+}
+
 /** Pings → cleaned, aggregated, non-vessel-filtered tracks file with meta. */
 export function buildTracksFile(pings: AisPing[]): AisTracksFile {
   const all = cleanTracks(aggregateTracks(pings));
