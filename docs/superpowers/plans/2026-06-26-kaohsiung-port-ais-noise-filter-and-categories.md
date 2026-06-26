@@ -554,12 +554,16 @@ describe('TYPE_TO_CATEGORY gap fixes', () => {
 });
 ```
 
-> Note: `貨櫃輪(有導槽)` uses FULL-WIDTH parens `（）`. Copy the exact string from the test below into the table key.
+> Note: `貨櫃輪(有導槽)` uses **HALF-WIDTH ASCII parens `( )`** (U+0028/U+0029) — exactly as in the real snapshot (`data/snapshots/khh-2026-06-19.json`, verified). Copy the literal verbatim from the test/impl below; **do NOT convert to full-width `（）`** or the key will never match the data and the type silently falls through to 其他.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run test/port-ais.test.ts -t "new codes" test/port-palette.test.ts -t "gap fixes"`
-Expected: FAIL — 33→其他, 拖船→其他, etc.
+Run each file with its own pattern (vitest `-t` takes a single pattern; a second `-t` would override the first):
+```
+npx vitest run test/port-ais.test.ts -t "new codes"
+npx vitest run test/port-palette.test.ts -t "gap fixes"
+```
+Expected: both FAIL — `mapAisTypeToCategory(33)`→其他 (not 工程), `cat('拖船')`→其他 (not 工作), etc.
 
 - [ ] **Step 3: Edit mapAisTypeToCategory**
 
@@ -580,7 +584,7 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
 
 - [ ] **Step 4: Edit TYPE_TO_CATEGORY**
 
-`examples/kaohsiung-port/palette.ts`, extend the `TYPE_TO_CATEGORY` literal (append these keys; full-width parens on the last):
+`examples/kaohsiung-port/palette.ts`, extend the `TYPE_TO_CATEGORY` literal (append these keys; the last key uses **half-width ASCII parens `( )`**, matching the real data):
 
 ```ts
   '拖船': '工作', '起重船': '工作', '多用途工作船': '工作', '工作平台船': '工作',

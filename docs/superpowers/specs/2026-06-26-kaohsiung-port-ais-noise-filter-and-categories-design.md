@@ -62,7 +62,7 @@
 | `isHandheldOrSart` | MMSI `^8\d{8}$` 或 `^97[024]\d{6}$` | 高 |
 | `isSarAircraft` | MMSI `^111\d{6}$` | 高 |
 | `isAnomalousMmsi` | MMSI **非** `^[2-7]\d{8}$` 且未被上列匹配 | 中 |
-| `looksLikeBuoyName` | 名稱含 `BUOY`、`NET`,或結尾 `--?\d{1,2}%` | 高 |
+| `looksLikeBuoyName` | 名稱含 `BUOY` 或結尾 `--?\d{1,2}%`(實作正規式 `/BUOY|--?\d{1,2}%/i`) | 高 |
 | `isGarbled` | AIS 類型碼 `>99`(非法)**且**船名含 ≥2 個非英數/非中日韓字元 | 高 |
 
 設計要點:
@@ -96,7 +96,7 @@
   | `油駁船` | 1 | 油品 |
   | `貨櫃輪(有導槽)` | 1 | 貨櫃 |
 
-  注:`貨櫃輪(有導槽)` 用**全形括號**(8 字元),需逐字比對。實作時再對最新 snapshot 掃一次以防新漏列。
+  注:`貨櫃輪(有導槽)` 用**半形 ASCII 括號 `( )`**(U+0028/U+0029,已驗證真實 snapshot 即半形),**不可改成全形 `（）`**,否則 key 對不到資料、該船型會默默掉進「其他」。實作時再對最新 snapshot 掃一次以防新漏列。
 - `mapAisTypeToCategory` 補:`33,34 → 工程`、`36,37 → 遊艇`(其餘維持;`90-99`、`0`、非法碼仍 → 其他)。
 - `scene/portPoints.ts` `TYPE_DIMS_M`:加 遊艇 `{loa:30,beam:8}`、工程 `{loa:90,beam:20}`(平面 footprint fallback 尺寸)。
 
