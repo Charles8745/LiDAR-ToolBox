@@ -21,7 +21,7 @@ export interface AisTrack {
 }
 
 export interface AisTracksFile {
-  meta: { fromMs: number; toMs: number; count: number; bbox: BBox };
+  meta: { fromMs: number; toMs: number; count: number; bbox: BBox; droppedNonVessel: number };
   ships: AisTrack[];
 }
 
@@ -232,14 +232,16 @@ export function mapAisTypeToCategory(code: number): ShipCategory {
   return '其他';
 }
 
-/** Pings → cleaned, aggregated tracks file with meta. */
+/** Pings → cleaned, aggregated, non-vessel-filtered tracks file with meta. */
 export function buildTracksFile(pings: AisPing[]): AisTracksFile {
-  const ships = cleanTracks(aggregateTracks(pings));
+  const all = cleanTracks(aggregateTracks(pings));
+  const ships = all.filter(isVessel);
+  const droppedNonVessel = all.length - ships.length;
   let fromMs = Infinity, toMs = -Infinity;
   for (const s of ships) for (const p of s.path) {
     if (p[2] < fromMs) fromMs = p[2];
     if (p[2] > toMs) toMs = p[2];
   }
   if (!Number.isFinite(fromMs)) { fromMs = 0; toMs = 0; }
-  return { meta: { fromMs, toMs, count: ships.length, bbox: KHH_BBOX }, ships };
+  return { meta: { fromMs, toMs, count: ships.length, bbox: KHH_BBOX, droppedNonVessel }, ships };
 }
