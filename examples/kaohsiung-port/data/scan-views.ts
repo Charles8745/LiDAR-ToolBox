@@ -17,7 +17,7 @@ export const DEFAULT_CFG: CarveCfg = {
   cellFrac: 0.022, signForward: 1, minPoints: 50,
 };
 // Per-category overrides (tune after eyeballing in the browser — see plan Task 5).
-const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
+export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
   // 工程: { cellFrac: 0.022, frontMaskMaxHeightFrac: 0.45, bgTolerance: 30 },
 };
 
