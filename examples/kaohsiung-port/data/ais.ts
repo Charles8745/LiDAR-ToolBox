@@ -185,6 +185,42 @@ export function cleanTracks(tracks: AisTrack[]): AisTrack[] {
   return out;
 }
 
+export type NonVesselReason =
+  | 'aton' | 'handheld-sart' | 'sar-aircraft' | 'anomalous-mmsi' | 'buoy-name' | 'garbled';
+
+// Fishing-net AIS markers / buoys: name contains BUOY, or ends with a battery
+// percentage like "-93%" / "--49%". (Bare "NET" intentionally NOT matched — the
+// %-suffix already catches Taiwan net markers, and "NET" would false-hit names
+// like PLANET; verified zero difference on real data 2026-06-19.)
+const BUOY_NAME = /BUOY|--?\d{1,2}%/i;
+
+/** Classify an AIS target as a real vessel or non-vessel noise (buoy / handheld /
+ *  corrupt). Rules from ITU-R M.585 (MMSI prefixes) + M.1371 (type codes) + the
+ *  Taiwan fishing-net-marker naming convention. See spec 2026-06-26. */
+export function classifyAisTarget(
+  t: Pick<AisTrack, 'mmsi' | 'name' | 'aisType'>,
+): { vessel: boolean; reason: NonVesselReason | '' } {
+  const m = String(t.mmsi ?? '').trim();
+  const name = String(t.name ?? '').trim();
+  // MMSI-based (highest confidence, ITU-R M.585)
+  if (/^99\d{7}$/.test(m)) return { vessel: false, reason: 'aton' };
+  if (/^8\d{8}$/.test(m) || /^97[024]\d{6}$/.test(m)) return { vessel: false, reason: 'handheld-sart' };
+  if (/^111\d{6}$/.test(m)) return { vessel: false, reason: 'sar-aircraft' };
+  if (!/^[2-7]\d{8}$/.test(m)) return { vessel: false, reason: 'anomalous-mmsi' };
+  // Name-based (Taiwan net markers on otherwise-legit MMSIs)
+  if (BUOY_NAME.test(name)) return { vessel: false, reason: 'buoy-name' };
+  // Corrupt transmission: illegal AIS type code (>99) AND a garbled name.
+  if (t.aisType > 99) {
+    const junk = (name.match(/[^A-Za-z0-9 .\-一-鿿]/g) || []).length;
+    if (junk >= 2) return { vessel: false, reason: 'garbled' };
+  }
+  return { vessel: true, reason: '' };
+}
+
+export function isVessel(t: Pick<AisTrack, 'mmsi' | 'name' | 'aisType'>): boolean {
+  return classifyAisTarget(t).vessel;
+}
+
 /** AIS ship-type code (0–99) → coarse category. AIS can't split container/bulk/LNG;
  *  callers should prefer TWPort SHIP_TYPE_NAME when a join exists (see data/join.ts). */
 export function mapAisTypeToCategory(code: number): ShipCategory {

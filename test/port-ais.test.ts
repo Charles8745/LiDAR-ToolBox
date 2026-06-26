@@ -176,3 +176,47 @@ describe('buildTracksFile', () => {
     expect(file.meta.bbox).toBeDefined();
   });
 });
+
+import { classifyAisTarget, isVessel } from '../examples/kaohsiung-port/data/ais';
+
+const tgt = (mmsi: string, name: string, aisType = 0) => ({ mmsi, name, aisType });
+
+describe('classifyAisTarget / isVessel', () => {
+  it('keeps a normal Taiwan vessel (MMSI 416, plain name)', () => {
+    expect(classifyAisTarget(tgt('416005912', 'KMSC NO502', 52))).toEqual({ vessel: true, reason: '' });
+    expect(isVessel(tgt('416005912', 'KMSC NO502', 52))).toBe(true);
+  });
+  it('keeps a foreign vessel (MMSI first digit 2-7)', () => {
+    expect(isVessel(tgt('249123456', 'BOKA CENTRE', 52))).toBe(true);
+  });
+  it('drops AtoN navigation aids (MMSI 99x)', () => {
+    expect(classifyAisTarget(tgt('994160462', 'BUOY4314601', 0))).toEqual({ vessel: false, reason: 'aton' });
+  });
+  it('drops handheld VHF (MMSI 8x, 9 digits)', () => {
+    expect(classifyAisTarget(tgt('888160001', '', 0))).toEqual({ vessel: false, reason: 'handheld-sart' });
+  });
+  it('drops SART/MOB/EPIRB (MMSI 970/972/974)', () => {
+    expect(classifyAisTarget(tgt('972123456', '', 0)).reason).toBe('handheld-sart');
+  });
+  it('drops SAR aircraft (MMSI 111x)', () => {
+    expect(classifyAisTarget(tgt('111232001', '', 0)).reason).toBe('sar-aircraft');
+  });
+  it('drops anomalous MMSI (not a 9-digit 2-7 station)', () => {
+    expect(classifyAisTarget(tgt('904160462', '', 0)).reason).toBe('anomalous-mmsi');
+    expect(classifyAisTarget(tgt('12345678', 'NEWLINE', 0)).reason).toBe('anomalous-mmsi');
+  });
+  it('drops fishing-net markers by name (battery % suffix) even on a legit MMSI', () => {
+    expect(classifyAisTarget(tgt('416005111', '5897-07-93%', 0)).reason).toBe('buoy-name');
+    expect(classifyAisTarget(tgt('416005112', 'HSD-NET-60%', 0)).reason).toBe('buoy-name');
+    expect(classifyAisTarget(tgt('416005113', 'LONGLINEBUOY-T00881%', 0)).reason).toBe('buoy-name');
+  });
+  it('drops garbled names only when AIS code is illegal (>99)', () => {
+    expect(classifyAisTarget(tgt('590123456', 'H3OL7CL20L0SL<2,F3/\\\\', 200)).reason).toBe('garbled');
+  });
+  it('keeps a plain-named code-0 unknown vessel', () => {
+    expect(isVessel(tgt('416123456', 'TRITON 8', 0))).toBe(true);
+  });
+  it('does not flag a normal name with a single punctuation as garbled', () => {
+    expect(isVessel(tgt('416123456', 'DER JIN TSAIR NO3', 0))).toBe(true);
+  });
+});
