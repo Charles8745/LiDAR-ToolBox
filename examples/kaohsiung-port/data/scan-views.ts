@@ -18,7 +18,8 @@ export const DEFAULT_CFG: CarveCfg = {
 };
 // Per-category overrides (tune after eyeballing in the browser — see plan Task 5).
 export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
-  // 工程: { cellFrac: 0.022, frontMaskMaxHeightFrac: 0.45, bgTolerance: 30 },
+  // dredger: 0.022 → 1570 pts (over the 1500 budget); 0.024 → ~1380, still reads as a working vessel.
+  工程: { cellFrac: 0.024 },
 };
 
 /** Filename keyword → view kind. Order matters: more-specific keywords first. */

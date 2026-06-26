@@ -10,6 +10,7 @@ import tugJson from '../data/ship-models/工作.json';
 import warshipJson from '../data/ship-models/軍艦.json';
 import cruiseJson from '../data/ship-models/客運.json';
 import yachtJson from '../data/ship-models/遊艇.json';
+import dredgerJson from '../data/ship-models/工程.json';
 
 /** Unit-space model: long axis +x (length 1), x/z centered, min-y=0. Geometry only. */
 export interface ShipModelTemplate { points: Float32Array }
@@ -57,7 +58,8 @@ const RAW: Partial<Record<ShipCategory, { points: number[] }>> = {
   軍艦: warshipJson,
   客運: cruiseJson,
   遊艇: yachtJson,
-  // 工程 / 其他: 無模型 → 平面 footprint fallback
+  工程: dredgerJson,
+  // 其他: 無模型 → 平面 footprint fallback
 };
 
 export const CATEGORY_MODEL_KEYS: Record<ShipCategory, string | null> = Object.fromEntries(
