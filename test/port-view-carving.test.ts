@@ -117,3 +117,94 @@ describe('registerGrid', () => {
     spy.mockRestore();
   });
 });
+
+import {
+  carveVisualHull, surfaceShell, assembleAxes, carveToTemplate, type CarveCfg,
+} from '../examples/kaohsiung-port/scene/viewCarving';
+
+const cfgBase: CarveCfg = { gridLong:120, bgTolerance:32, coverFrac:0.02, frontMaskMaxHeightFrac:0.45, cellFrac:0.028, signForward:1, minPoints:30 };
+
+describe('carveVisualHull + surfaceShell', () => {
+  it('three solid silhouettes carve a HOLLOW box shell', () => {
+    const side = solid(40,20), top = solid(40,16), front = solid(16,20);
+    const dims = registerGrid(side, top, front, 40); // nz40, ny20, nx16
+    const grid = carveVisualHull(side, top, front, dims, 1.0);
+    const iz=20, iy=10, ix=8;
+    expect(grid[(iz*dims.ny+iy)*dims.nx+ix]).toBe(1);        // interior solid
+    const shell = surfaceShell(grid, dims);
+    let hasInterior = false;
+    for (let i=0;i<shell.length;i+=3) if (shell[i]===ix && shell[i+1]===iy && shell[i+2]===iz) hasInterior = true;
+    expect(hasInterior).toBe(false);                          // interior excluded from shell
+    expect(shell.length).toBeGreaterThan(0);
+  });
+
+  it('the FRONT silhouette carves the hull cross-section below the deck line', () => {
+    const nz=20, ny=20, nx=16;
+    const side = solid(nz,ny), top = solid(nz,nx);
+    const front: Mask = { data: new Uint8Array(nx*ny), w:nx, h:ny }; // solid only central beam band
+    for (let y=0;y<ny;y++) for (let x=0;x<nx;x++) if (x>=nx/4 && x<3*nx/4) front.data[y*nx+x]=1;
+    const grid = carveVisualHull(side, top, front, { nx, ny, nz }, 1.0); // front applies everywhere
+    const izL=10, iyL=2;
+    expect(grid[(izL*ny+iyL)*nx+1]).toBe(0);  // outside front beam band → carved
+    expect(grid[(izL*ny+iyL)*nx+8]).toBe(1);  // inside band → solid
+  });
+
+  it('above-deck structure localizes to z where SIDE is tall (no mid-ship phantom tower)', () => {
+    const nz=40, ny=20, nx=16;
+    const side: Mask = { data: new Uint8Array(nz*ny), w:nz, h:ny };
+    for (let z=0;z<nz;z++) for (let y=0;y<ny;y++){
+      const endBand = z < nz*0.2 || z > nz*0.8;   // bow + stern tall
+      const lowHull = y >= ny*0.6;                 // bottom rows (low height) = hull everywhere
+      if (endBand || lowHull) side.data[y*nz+z] = 1;
+    }
+    const grid = carveVisualHull(side, solid(nz,nx), solid(nx,ny), { nx, ny, nz }, 0.45);
+    const highAt = (z:number): boolean => {
+      for (let iy=Math.floor(ny*0.6); iy<ny; iy++) for (let ix=0;ix<nx;ix++) if (grid[(z*ny+iy)*nx+ix]) return true;
+      return false;
+    };
+    expect(highAt(2)).toBe(true);                  // bow end: side tall → tower
+    expect(highAt(nz-3)).toBe(true);               // stern end: side tall → tower
+    expect(highAt(Math.floor(nz/2))).toBe(false);  // mid-ship: side low → NO phantom tower
+  });
+
+  it('a circular FRONT silhouette carves a rounded (non-box) cross-section', () => {
+    const nz=30, D=20;
+    const circle = (d:number): Mask => {
+      const data=new Uint8Array(d*d); const c=(d-1)/2, r=d/2;
+      for (let y=0;y<d;y++) for (let x=0;x<d;x++){ const dx=x-c,dy=y-c; if (dx*dx+dy*dy<=r*r) data[y*d+x]=1; }
+      return { data, w:d, h:d };
+    };
+    const grid = carveVisualHull(solid(nz,D), solid(nz,D), circle(D), { nx:D, ny:D, nz }, 1.0);
+    const izM=15;
+    expect(grid[(izM*D + Math.floor(D/2))*D + Math.floor(D/2)]).toBe(1); // center solid
+    expect(grid[(izM*D + 1)*D + 1]).toBe(0);                              // corner carved (rounded)
+    expect(grid[(izM*D + (D-2))*D + (D-2)]).toBe(0);
+  });
+});
+
+describe('assembleAxes', () => {
+  it('returns side/top/front and unions a mirror-aligned secondary', () => {
+    const r = assembleAxes({ side: solid(10,4), top: solid(10,3), front: solid(3,4), side2: solid(10,4) });
+    expect(r.side.w).toBe(10); expect(r.top.w).toBe(10); expect(r.front.w).toBe(3);
+  });
+  it('throws when a required view is missing', () => {
+    expect(() => assembleAxes({ side: solid(10,4), top: solid(10,3) })).toThrow(/missing required view: front/);
+  });
+});
+
+describe('carveToTemplate', () => {
+  it('returns ≤ budget normalized points (x longest ≈1, min-y≈0)', () => {
+    const pts = carveToTemplate(solid(120,30), solid(120,24), solid(24,30), cfgBase);
+    expect(pts.length % 3).toBe(0);
+    expect(pts.length / 3).toBeLessThanOrEqual(1500);
+    expect(pts.length / 3).toBeGreaterThanOrEqual(cfgBase.minPoints);
+    let minY=Infinity, maxX=-Infinity, minX=Infinity;
+    for (let i=0;i<pts.length;i+=3){ minY=Math.min(minY,pts[i+1]); maxX=Math.max(maxX,pts[i]); minX=Math.min(minX,pts[i]); }
+    expect(minY).toBeGreaterThanOrEqual(-1e-6);
+    expect(maxX - minX).toBeGreaterThan(0.9);
+  });
+  it('throws on a degenerate (empty) carve instead of writing 0 points', () => {
+    const empty: Mask = { data: new Uint8Array(120*30), w:120, h:30 };
+    expect(() => carveToTemplate(empty, empty, empty, cfgBase)).toThrow(/degenerate/i);
+  });
+});

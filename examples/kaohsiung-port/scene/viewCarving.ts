@@ -1,7 +1,4 @@
 // examples/kaohsiung-port/scene/viewCarving.ts
-// normalizeToUnit/voxelDownsample are consumed in Task 3 (carveToTemplate). Until then this import
-// is unused; @ts-expect-error self-enforces removal of this line once Task 3 wires them in.
-// @ts-expect-error TS6192 forward-referenced import; delete this directive when the functions are used
 import { normalizeToUnit, voxelDownsample } from './meshSampling';
 
 export interface Mask { data: Uint8Array; w: number; h: number }
@@ -130,4 +127,81 @@ export function registerGrid(side: Mask, top: Mask, front: Mask, gridLong: numbe
     console.warn(`registerGrid: front beam/height ${frontAspect.toFixed(2)} vs side+top-derived ${derived.toFixed(2)} — perspective/scale mismatch (continuing length-anchored)`);
   }
   return { nx, ny, nz };
+}
+
+/** Orthographic visual hull. Voxel solid iff side(z,y) ∧ top(z,x) ∧ frontConstraint.
+ *  frontConstraint: below frontMaskMaxHeightFrac the front silhouette applies (shapes hull V/bulwark);
+ *  above it the front is "open" (=1) so end-towers are carved by side×top only — the side mask's
+ *  z-localization (tall only where real structure is) keeps towers at their true station, removing the
+ *  two-tower ghost. */
+export function carveVisualHull(side: Mask, top: Mask, front: Mask, dims: GridDims, frontMaskMaxHeightFrac: number): Uint8Array {
+  const { nx, ny, nz } = dims;
+  const grid = new Uint8Array(nx * ny * nz);
+  for (let iz = 0; iz < nz; iz++) {
+    const uz = (iz + 0.5) / nz;
+    for (let iy = 0; iy < ny; iy++) {
+      const uy = (iy + 0.5) / ny;        // 0=bottom,1=top (world up)
+      const vImg = 1 - uy;               // image row (top-down)
+      if (!sampleMask(side, uz, vImg)) continue;            // side: (length, height)
+      for (let ix = 0; ix < nx; ix++) {
+        const ux = (ix + 0.5) / nx;      // beam
+        if (!sampleMask(top, uz, ux)) continue;             // top: (length, beam)
+        const inFront = uy <= frontMaskMaxHeightFrac ? sampleMask(front, ux, vImg) : 1; // front: (beam, height)
+        if (inFront) grid[(iz * ny + iy) * nx + ix] = 1;
+      }
+    }
+  }
+  return grid;
+}
+
+/** Keep only boundary voxels (≥1 of 6 face-neighbours empty/edge) → hollow shell.
+ *  Emits packed xyz in grid coords: x=beam, y=height, z=length. */
+export function surfaceShell(grid: Uint8Array, dims: GridDims): Float32Array {
+  const { nx, ny, nz } = dims;
+  const at = (x: number, y: number, z: number): number =>
+    (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) ? 0 : grid[(z * ny + y) * nx + x];
+  const out: number[] = [];
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    if (!grid[(z * ny + y) * nx + x]) continue;
+    if (!at(x+1,y,z) || !at(x-1,y,z) || !at(x,y+1,z) || !at(x,y-1,z) || !at(x,y,z+1) || !at(x,y,z-1)) out.push(x, y, z);
+  }
+  return Float32Array.from(out);
+}
+
+export interface CarveCfg {
+  gridLong: number; bgTolerance: number; coverFrac: number;
+  frontMaskMaxHeightFrac: number; cellFrac: number; signForward: 1 | -1;
+  minPoints: number;
+  perView?: Partial<Record<ViewKind, Orient>>;
+}
+
+/** Apply per-view orient, then per axis: primary mask OR the mirror-aligned secondary. Throws on a
+ *  missing required view (side/top/front). mirrorX aligns the opposite-direction secondary. */
+export function assembleAxes(byKind: Partial<Record<ViewKind, Mask>>, perView?: Partial<Record<ViewKind, Orient>>): { side: Mask; top: Mask; front: Mask } {
+  const get = (k: ViewKind): Mask | undefined => {
+    const m = byKind[k]; if (!m) return undefined;
+    const o = perView?.[k]; return o ? applyOrient(m, o) : m;
+  };
+  const need = (k: ViewKind): Mask => { const m = get(k); if (!m) throw new Error(`missing required view: ${k}`); return m; };
+  let side = need('side');  const s2 = get('side2');  if (s2) side = unionMask(side, mirrorX(s2));
+  let top = need('top');    const bo = get('bottom');  if (bo) top = unionMask(top, mirrorX(bo));
+  let front = need('front'); const st = get('stern');  if (st) front = unionMask(front, mirrorX(st));
+  return { side, top, front };
+}
+
+/** Full carve: register grid → carve hull → surface shell → normalize (length→x, min-y=0) → voxel
+ *  downsample. Throws on a degenerate/empty carve (a silhouette likely keyed to empty). */
+export function carveToTemplate(side: Mask, top: Mask, front: Mask, cfg: CarveCfg): Float32Array {
+  const dims = registerGrid(side, top, front, cfg.gridLong);
+  const grid = carveVisualHull(side, top, front, dims, cfg.frontMaskMaxHeightFrac);
+  const shell = surfaceShell(grid, dims);
+  if (shell.length / 3 < cfg.minPoints) {
+    throw new Error(`degenerate carve: ${shell.length / 3} shell points (< minPoints ${cfg.minPoints}) — a silhouette likely keyed to empty (check bgTolerance / view orientation)`);
+  }
+  const norm = normalizeToUnit(shell, { forwardAxis: 'z', upAxis: 'y', signForward: cfg.signForward });
+  const pts = voxelDownsample(norm.positions, cfg.cellFrac);
+  if (pts.length / 3 < cfg.minPoints) {
+    throw new Error(`degenerate carve: ${pts.length / 3} points after downsample (< minPoints ${cfg.minPoints})`);
+  }
+  return pts;
 }
