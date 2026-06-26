@@ -438,6 +438,60 @@ npm run port:models      # → data/ship-models/<船型>.json
 
 > **陷阱**:`npx`/npm 遇 `~/.npm` 權限錯 → `export npm_config_cache=/tmp/npmcache`。原始 glb/gltf/貼圖**已 gitignore**(`data/models/*`,只留 `.gitkeep`/`CREDITS.md`),只 commit 烘出的 `ship-models/*.json`。CC-BY 模型記得在 `CREDITS.md` 補作者。
 
+### 4l. AIS 非船雜訊過濾 + 船型分類擴充
+
+#### 非船目標過濾
+
+`data/ais.ts` 的 `classifyAisTarget` 是**單一事實來源**——決定一筆 AIS 記錄是否為合法船舶。所有過濾規則都在這裡,不散落各處。分類基準依 ITU-R M.585(MMSI 編碼)、M.1371(AIS 類型碼)與台灣漁網示標命名慣例:
+
+| 非船原因 | 判斷規則 |
+|---|---|
+| `aton`(助航浮標) | MMSI 以 `99` 開頭 |
+| `handheld-sart`(手持 VHF / SART / MOB) | MMSI 9 碼且以 `8` 開頭;或 `97[024]` 系列 |
+| `sar-aircraft`(SAR 航空器) | MMSI 9 碼且以 `111` 開頭 |
+| `anomalous-mmsi`(異常格式) | MMSI 首位不在 `[2–7]` 且不落入上述已知類別 |
+| `buoy-name`(浮標命名) | 船名含 `BUOY`,或尾端符合 `--?\d{1,2}%`(漁網示標電量格式) |
+| `garbled`(亂碼/垃圾) | AIS 類型碼 >99(非法值)且船名含 ≥2 個非英數、非中日韓字元 |
+
+台灣正規 MMSI(首碼 2–7,含 416 台灣籍)+ 正常船名 → **一律保留,不過濾**。CLI export 會印出每筆丟棄明細(非靜默)。
+
+函式簽名:`classifyAisTarget(mmsi, shipName, aisType) → { isVessel, reason? }`,搭配型別 `NonVesselReason`。
+
+#### 已烘焙的 AIS 航跡(重新過濾)
+
+`npm run port:ais:refilter` 是一個**冪等 CLI**:讀 committed 的 `data/ais-tracks/khh-*.json`,重新跑 `classifyAisTarget` 過濾,原地覆寫。**不需要 raw `.jsonl`**;可在任何機器上跑,結果可重現。
+
+```bash
+npm run port:ais:refilter   # 重新過濾所有 khh-*.json(idempotent)
+```
+
+`buildTracksFile`(由 `port:ais:export` 呼叫)也**自動過濾非船目標**,並在輸出 JSON 的 `meta.droppedNonVessel` 記錄各分類的丟棄計數——往後新錄的 raw 資料直接就乾淨。
+
+**目前資料(2026-06-19 / 2026-06-18 重烘後)**:
+
+| 檔案 | 過濾前 | 過濾後 | 丟棄 |
+|---|---|---|---|
+| `khh-2026-06-19.json` | 551 船 | 443 船 | 108(aton 69 / handheld-sart 15 / anomalous-mmsi 7 / buoy-name 13 / garbled 4) |
+| `khh-2026-06-18.json` | 257 船 | 217 船 | 40 |
+
+KPI「範圍內 AIS 船數」現在只計真實船舶(不含浮標),峰值 280。
+
+#### 船型分類(10 類)
+
+船型從 8 類擴充至 **10 類**,新增 **遊艇**(`[235,205,95]` 黃)與 **工程**(`[160,175,95]` 橄欖)。有三個同步點,改任一個都要確認另外兩個對齊:
+
+| 同步點 | 檔案 | 說明 |
+|---|---|---|
+| `SHIP_CATEGORIES` 陣列 | `palette.ts` | 類別名稱清單(順序即 LUT index) |
+| `SHIP_CATEGORY_COLORS` 陣列 | `palette.ts` | 對應 `[R,G,B][]` 0–255(篩選面板彩色點也從這裡來) |
+| `TYPE_DIMS_M` 映射 | `scene/portPoints.ts` | 各類別 `{ loa, beam }` 平面 fallback 尺寸(無 3D 模型時用) |
+
+AIS type code 對映更新:`mapAisTypeToCategory`(在 `data/ais.ts`)現在也覆蓋:
+- 類型碼 33/34 → 工程、36/37 → 遊艇(ITU-R M.1371)
+- 12 個官方船型名稱(`TYPE_TO_CATEGORY`)直接映射
+
+> **遊艇/工程 的 3D 模型**:目前無模型,自動 fallback 回平面 footprint(§4k 管線相同;缺模型不影響其他船型)。要加模型時按 §4k 完整流程即可。
+
 ---
 
 ## 5. `__twin` 除錯把手(Console)
