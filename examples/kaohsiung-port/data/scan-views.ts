@@ -22,7 +22,10 @@ export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
   工程: { cellFrac: 0.024 },
   // STS gantry crane: front view = open portal (two legs + top beam) → front mask must apply at ALL
   // heights (≠ ships' 0.45 anti-tower carve) to cut the leg gap & boom profile. cellFrac tuned post-bake.
-  起重機: { frontMaskMaxHeightFrac: 1.0, cellFrac: 0.024 },
+  // top view was captured boom-vertical → rotate 270 (CCW) so boom lies on the x-axis matching side
+  // (side has boom-tip on the left/uz=0; rotate 270 sends top-of-image → left). Baked from the 3 clean
+  // required views (side/front/top); side2/stern/bottom set aside (same-handedness → mirror-union conflict).
+  起重機: { frontMaskMaxHeightFrac: 1.0, cellFrac: 0.024, perView: { top: { rotate: 270 } } },
 };
 
 /** Filename keyword → view kind. Order matters: more-specific keywords first. */

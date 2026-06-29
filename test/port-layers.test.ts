@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { buildLayers, buildLayerPoints, type LayerConfig } from '../examples/kaohsiung-port/scene/layers';
 import type { OsmGeometry } from '../examples/kaohsiung-port/data/osm';
 import { sampleGantry } from '../examples/kaohsiung-port/scene/landmarks';
+import { loadLandmarkModel } from '../examples/kaohsiung-port/scene/landmarkModels';
 
 const idProj = { toWorld: (lat: number, lon: number) => ({ x: lon, z: lat }) };
 
@@ -36,19 +37,28 @@ describe('buildLayerPoints', () => {
 });
 
 describe("buildLayerPoints kind:'model'", () => {
-  const modelCfg: LayerConfig = {
+  const baseModelCfg: LayerConfig = {
     key: 'crane', label: 'K', source: 'cranes', kind: 'model', color: [70, 80, 90],
     pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,
-    modelKey: 'crane', scaleU: 1, orientStepU: 1.5, orientProbeR: 1.5,
+    scaleU: 1, orientStepU: 1.5, orientProbeR: 1.5,
     legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.1,
   };
   it('falls back to a gantry wireframe when no template is registered', () => {
-    const pts = buildLayerPoints(modelCfg, OSM, idProj as any);
+    // '__none__' is never registered → exercises the fallback regardless of which models are baked in.
+    const pts = buildLayerPoints({ ...baseModelCfg, modelKey: '__none__' }, OSM, idProj as any);
     const expected = sampleGantry(
       { x: 5, z: 5 }, 0, { legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.1 },
     ); // OSM.cranes = [{lat:5,lon:5}] → idProj → {x:5,z:5}
     expect(pts.length).toBe(expected.length);
     expect(pts.length).toBeGreaterThan(0);
+    expect(pts.length % 3).toBe(0);
+  });
+  it('instances the carved template (N × template points) when one is registered', () => {
+    const tpl = loadLandmarkModel('crane'); // baked crane is wired in landmarkModels RAW
+    expect(tpl).not.toBeNull();
+    const pts = buildLayerPoints({ ...baseModelCfg, modelKey: 'crane' }, OSM, idProj as any);
+    // OSM.cranes has 1 node → exactly one template instance (no fragile hard-coded count)
+    expect(pts.length).toBe(tpl!.points.length);
     expect(pts.length % 3).toBe(0);
   });
 });

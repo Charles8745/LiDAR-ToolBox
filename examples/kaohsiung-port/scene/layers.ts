@@ -4,7 +4,7 @@ import type { Projection, World } from '../geo/projection';
 import type { OsmGeometry, Polyline, LatLon } from '../data/osm';
 import { samplePolyline } from './portPoints';
 import { footprintCentroidRadius, sampleCylinderShell, sampleGantry, sampleZoneRing } from './landmarks';
-import { loadLandmarkModel, buildModelInstances } from './landmarkModels';
+import { loadLandmarkModel, loadLandmarkOrient, buildModelInstances } from './landmarkModels';
 import { buildPierSegs, collectLandPoints } from './orient';
 
 export type LayerKind = 'line' | 'cylinder' | 'gantry' | 'zone' | 'model';
@@ -95,9 +95,10 @@ export function buildLayerPoints(cfg: LayerConfig, osm: OsmGeometry, proj: Proje
     const land = collectLandPoints(osm, proj);
     const centers = cranePts.map((ll) => toWorld(proj, ll));
     const opts = { stepU: cfg.orientStepU ?? 1.5, probeR: cfg.orientProbeR ?? 1.5 };
+    const headings = cfg.modelKey ? loadLandmarkOrient(cfg.modelKey) ?? undefined : undefined;
     // Return directly — do NOT `out.push(...bigArray)`: ~70×1200×3 numbers spread as args overflows
     // the JS call-arg limit (RangeError). The model branch is exclusive, so `out` is still empty here.
-    return buildModelInstances(tpl, centers, segs, land, opts, cfg.scaleU ?? 1, cfg.baseY, cfg.headingOverrides);
+    return buildModelInstances(tpl, centers, segs, land, opts, cfg.scaleU ?? 1, cfg.baseY, cfg.headingOverrides, headings);
   } else { // zone
     for (const poly of raw as Polyline[]) {
       if (poly.length === 1) {

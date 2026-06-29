@@ -35,4 +35,17 @@ describe('buildModelInstances', () => {
     // override +1 → heading +π/2 → boom tip at +z
     expect(out[5]).toBeCloseTo(2, 5);
   });
+
+  it('uses a baked heading when provided (ignoring the land-density water-side)', () => {
+    // baked heading 0 → boom (+x) along world +x, regardless of land on +z
+    const out = buildModelInstances(tpl, [{ x: 0, z: 0 }], segs, land, opts, 2, 0, undefined, [0]);
+    expect(out[3]).toBeCloseTo(2, 5); // boom tip at +x
+    expect(out[5]).toBeCloseTo(0, 5);
+  });
+
+  it('lets a manual override outrank a baked heading', () => {
+    // override +1 → +π/2 (boom +z) wins over the baked heading 0 (+x)
+    const out = buildModelInstances(tpl, [{ x: 0, z: 0 }], segs, land, opts, 2, 0, { 0: 1 }, [0]);
+    expect(out[5]).toBeCloseTo(2, 5);
+  });
 });
