@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { buildLayers, buildLayerPoints, type LayerConfig } from '../examples/kaohsiung-port/scene/layers';
 import type { OsmGeometry } from '../examples/kaohsiung-port/data/osm';
+import { sampleGantry } from '../examples/kaohsiung-port/scene/landmarks';
 
 const idProj = { toWorld: (lat: number, lon: number) => ({ x: lon, z: lat }) };
 
@@ -31,6 +32,24 @@ describe('buildLayerPoints', () => {
   it('returns empty for a missing/empty source', () => {
     const pts = buildLayerPoints({ ...CFG[0], source: 'breakwater' }, OSM, idProj as any);
     expect(pts).toEqual([]);
+  });
+});
+
+describe("buildLayerPoints kind:'model'", () => {
+  const modelCfg: LayerConfig = {
+    key: 'crane', label: 'K', source: 'cranes', kind: 'model', color: [70, 80, 90],
+    pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,
+    modelKey: 'crane', scaleU: 1, orientStepU: 1.5, orientProbeR: 1.5,
+    legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.1,
+  };
+  it('falls back to a gantry wireframe when no template is registered', () => {
+    const pts = buildLayerPoints(modelCfg, OSM, idProj as any);
+    const expected = sampleGantry(
+      { x: 5, z: 5 }, 0, { legHeight: 0.6, baseW: 0.4, baseD: 0.4, boomLen: 0.5, spacing: 0.1 },
+    ); // OSM.cranes = [{lat:5,lon:5}] → idProj → {x:5,z:5}
+    expect(pts.length).toBe(expected.length);
+    expect(pts.length).toBeGreaterThan(0);
+    expect(pts.length % 3).toBe(0);
   });
 });
 
