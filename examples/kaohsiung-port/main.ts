@@ -18,6 +18,7 @@ import basemapMeta from './data/basemap-khh.json';
 import basemapUrl from './data/basemap-khh.jpg';
 import { buildLabelLayer } from './scene/textLabels';
 import { DEFAULT_BANDS } from './scene/portZones';
+import { buildPierSegs, nearestPierTangent } from './scene/orient';
 import { shortBerthLabel, type BerthMarker } from './data/berthGeometry';
 import berthsData from './data/berths-khh.json';
 import labelFontUrl from './data/fonts/zones-subset.woff?url';
@@ -60,25 +61,7 @@ const incomingRefMs = snapshot.capturedAtMs;
 const INCOMING_WINDOW = 6 * 3600_000; // 預報前瞻 6 小時
 
 // 預建碼頭線段(世界座標),供靠泊船朝向對齊用(L2:此 feed 無 heading,靜止船朝向不可靠)。
-interface Seg { ax: number; az: number; bx: number; bz: number; }
-const pierSegs: Seg[] = [];
-for (const poly of osm.piers) {
-  const w = poly.map((ll) => proj.toWorld(ll.lat, ll.lon));
-  for (let i = 0; i < w.length - 1; i++) pierSegs.push({ ax: w[i].x, az: w[i].z, bx: w[i + 1].x, bz: w[i + 1].z });
-}
-/** 最近碼頭線段:回傳對齊方向(footprint heading)與到該線段的距離(世界單位)。 */
-function nearestPier(x: number, z: number): { headingRad: number; distU: number } {
-  let bestD = Infinity, h = 0;
-  for (const s of pierSegs) {
-    const dx = s.bx - s.ax, dz = s.bz - s.az;
-    const len2 = dx * dx + dz * dz || 1e-9;
-    const tt = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / len2));
-    const px = s.ax + dx * tt, pz = s.az + dz * tt;
-    const d = (x - px) ** 2 + (z - pz) ** 2;
-    if (d < bestD) { bestD = d; h = Math.atan2(dz, dx); }
-  }
-  return { headingRad: h, distU: Math.sqrt(bestD) };
-}
+const pierSegs = buildPierSegs(osm.piers, proj);
 
 // Per-track 預算快取(類別 / TWPort join / 是否靠泊 / 碼頭朝向)—— 這些都是靜態的,
 // 不該每幀重算(M1)。靠泊判定:整段軌跡淨位移 < 100m(1 世界單位)。
@@ -92,7 +75,7 @@ for (const t of tracks) {
   const p0 = t.path[0], pl = t.path[t.path.length - 1];
   const a = proj.toWorld(p0[0], p0[1]), b = proj.toWorld(pl[0], pl[1]);
   const stationary = Math.hypot(b.x - a.x, b.z - a.z) < STATIONARY_U;
-  const np = nearestPier(a.x, a.z);
+  const np = nearestPierTangent(a.x, a.z, pierSegs);
   const pierAligned = stationary && np.distU < PIER_SNAP_MAX; // 靠泊且貼近碼頭才對齊;否則(錨地/移動)用航向
   trackMeta.set(t.mmsi, { category, vessel, pierAligned, pierH: np.headingRad });
 }
