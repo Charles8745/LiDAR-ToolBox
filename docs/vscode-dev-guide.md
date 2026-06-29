@@ -532,6 +532,16 @@ npm run port:scan-views      # → data/ship-models/<船型>.json
 
 > **陷阱**:① **vite-node 下 CLI 不能用 `import.meta.url===file://${process.argv[1]}` run-guard**(永遠 false,會靜默不執行)→ 所以拆成 lib(`scan-views.ts`,無 self-call)+ 薄 entry(`scan-views.cli.ts`,無條件 `main()`),npm script 指 `.cli.ts`。② 原始截圖 git-ignored(`models/*`),只 commit 烘出的 `ship-models/*.json`。③ visual-hull 是**外殼包絡**:細吸料管/桁架/桅杆會丟失(港區尺度點雲本就看不清,可接受);只能還原剪影看得到的外型,內凹/非分離凹形不行。
 
+#### 4m.1 地物也走多視圖管線 —— 橋式起重機 + **底圖烘焙定向**(2026-06-29)
+
+§4m 不只建船:靜態地物(第一個用例=**橋式起重機**)透過 `scene/layers.ts` 新 `kind:'model'` 圖層,把烘出的 unit 模板在每個 OSM 座標**靜態實例化**(`scene/landmarkModels.ts` 的 `buildModelInstances`,鏡像 `shipModels.ts`;缺模板自動 fallback 回 `sampleGantry`)。任務 A 第二塊(儲槽)可直接重用 `kind:'model'`。
+
+- **雕刻**:同 §4m(crane 用 3 張必需視圖 side/front/top;`VIEW_BAKE_CONFIG['起重機']` 設 `frontMaskMaxHeightFrac:1.0`(開放門架全高度生效)+ `perView:{ top:{ rotate:270 } }`(top 拍成 boom-垂直時轉正))。同手性的多餘視圖(side2/stern/bottom 都 boom-同向)會與 `assembleAxes` 的 `mirrorX` union 衝突成對稱幻影 → 移出資料夾(放 `_alt/`)或加 `perView.flipX` 抵銷。
+- **🆕 定向 = 底圖亮度烘焙(別用 OSM 土地密度)**:`scene/orient.ts` 的 `waterSideSign`(OSM 特徵密度)**在窄長雙岸港 + 內陸無特徵貨櫃場下 ~隨機(高雄實測 27/70)**,**僅保留作未烘焙地物的通用 fallback,不是 crane 的當前策略**。crane 改走 **`npm run port:crane-orient`**(`data/fetch-crane-orient.ts`):sharp 讀已 commit 的 `basemap-khh.jpg`,沿每艘碼頭垂直兩側採樣航照亮度、選**暗(水)側** → 寫 `data/crane-orient.json`(per-crane heading,與圖層 source 同序)。實測升到 56/70 朝水。
+- **執行期 heading 優先序**(`buildModelInstances`):**人工 `headingOverrides[idx]=±1` > 烘焙 `crane-orient.json` heading > `craneBoomHeading`(OSM fallback)**。
+- **旋鈕**:重烘定向調 `fetch-crane-orient.ts` 的 `PROBES`(採樣距離,世界單位);個別內灣判錯 → `main.ts` crane 層加 `headingOverrides:{ <crane-index>: -1 }` 翻面;尺度 `scaleU`(1.0*S≈boom 100m);`geo→world→pixel` 映射須與 `main.ts buildBasemapPlane` 一致(`toWorld(s,w)`→`toWorld(n,e)`、image row 0 = 北)。
+- **陷阱**:`fetch-crane-orient.ts` **無 run-guard、頂層無條件 `main()`** —— 因為它**不被任何測試 import**(若日後要被 import,須照 scan-views 拆 lib+`.cli.ts`)。
+
 ---
 
 ## 5. `__twin` 除錯把手(Console)

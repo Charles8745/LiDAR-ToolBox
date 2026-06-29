@@ -14,7 +14,8 @@ export type LayerKind = 'line' | 'cylinder' | 'gantry' | 'zone' | 'model';
  * (the builder casts `osm[source]` per `kind`):
  *   - kind 'line'     → source of Polyline[] (coastline | piers | breakwater)
  *   - kind 'cylinder' → source of Polyline[] closed footprints (tanks)
- *   - kind 'gantry'   → source of LatLon[]   points (cranes)
+ *   - kind 'gantry'   → source of LatLon[]   points (procedural wireframe fallback)
+ *   - kind 'model'    → source of LatLon[]   points (cranes; carved template instanced & oriented, gantry fallback)
  *   - kind 'zone'     → source of Polyline[] (anchorages: node = length-1 polyline)
  * A mismatched pairing yields a garbled/empty layer, not a type error.
  * `bloomGroup` is not used here; the consumer (main.ts) reads `handle.config.bloomGroup`
