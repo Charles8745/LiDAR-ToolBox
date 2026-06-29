@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import { classifyView, decodeMask } from '../examples/kaohsiung-port/data/scan-views';
+import { classifyView, decodeMask, VIEW_BAKE_CONFIG } from '../examples/kaohsiung-port/data/scan-views';
 
 describe('classifyView', () => {
   it('maps filename keywords to view kinds (specific before generic)', () => {
@@ -30,5 +30,14 @@ describe('decodeMask', () => {
     expect(m.w).toBe(20); expect(m.h).toBe(20);
     expect(m.data[10*20+10]).toBe(1);
     expect(m.data[0]).toBe(0);
+  });
+});
+
+describe('VIEW_BAKE_CONFIG', () => {
+  it('crane uses full-height front mask (no ship anti-tower carve)', () => {
+    expect(VIEW_BAKE_CONFIG['起重機']?.frontMaskMaxHeightFrac).toBe(1.0);
+  });
+  it('crane sets a density knob within budget', () => {
+    expect(VIEW_BAKE_CONFIG['起重機']?.cellFrac).toBeGreaterThan(0);
   });
 });

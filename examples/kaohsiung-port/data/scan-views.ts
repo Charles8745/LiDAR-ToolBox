@@ -18,8 +18,11 @@ export const DEFAULT_CFG: CarveCfg = {
 };
 // Per-category overrides (tune after eyeballing in the browser — see plan Task 5).
 export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
-  // dredger: 0.022 → 1570 pts (over the 1500 budget); 0.024 → ~1380, still reads as a working vessel.
+  // dredger: 0.022 → 1570 pts (over the 1500 budget); 0.024 → 1230, still reads as a working vessel.
   工程: { cellFrac: 0.024 },
+  // STS gantry crane: front view = open portal (two legs + top beam) → front mask must apply at ALL
+  // heights (≠ ships' 0.45 anti-tower carve) to cut the leg gap & boom profile. cellFrac tuned post-bake.
+  起重機: { frontMaskMaxHeightFrac: 1.0, cellFrac: 0.024 },
 };
 
 /** Filename keyword → view kind. Order matters: more-specific keywords first. */
