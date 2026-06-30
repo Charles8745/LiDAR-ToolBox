@@ -12,23 +12,30 @@ function median3(vals: number[]): number {
 }
 
 /** Chroma-key silhouette: bg = median of 4 corners; flood-fill bg from borders (within bgTolerance
- *  RGB euclidean distance). Everything not reached = foreground (1), incl. enclosed bg-coloured holes. */
-export function extractSilhouette(rgba: Uint8Array, w: number, h: number, bgTolerance: number): Mask {
+ *  RGB euclidean distance). Everything not reached = foreground (1), incl. enclosed bg-coloured holes.
+ *
+ *  minHoleAreaFrac > 0 (opt-in): after the border fill, also carve any *enclosed* bg-coloured region
+ *  whose area ≥ minHoleAreaFrac × (w·h) back to background. This distinguishes large structural voids
+ *  (an STS crane's A-frame triangle, truss gaps, leg portal) — which a flood-fill cannot reach and so
+ *  would wrongly fill solid — from small paint/antialias speckles, which stay solid. Default 0 keeps
+ *  every enclosed region filled (correct for ship hulls; their interior bg-coloured pixels are rare). */
+export function extractSilhouette(rgba: Uint8Array, w: number, h: number, bgTolerance: number, minHoleAreaFrac = 0): Mask {
   const cornerIdx = [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]];
   const bg = [0, 1, 2].map((c) => median3(cornerIdx.map(([x, y]) => rgba[(y * w + x) * 4 + c])));
   const tol2 = bgTolerance * bgTolerance;
-  const fg = new Uint8Array(w * h).fill(1);
-  const isBg = (x: number, y: number): boolean => {
-    const i = (y * w + x) * 4;
+  const bgCol = new Uint8Array(w * h);   // 1 where pixel matches background colour
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4;
     const dr = rgba[i] - bg[0], dg = rgba[i + 1] - bg[1], db = rgba[i + 2] - bg[2];
-    return dr * dr + dg * dg + db * db <= tol2;
-  };
+    if (dr * dr + dg * dg + db * db <= tol2) bgCol[p] = 1;
+  }
+  const fg = new Uint8Array(w * h).fill(1);
   const stack: number[] = [];
   const visit = (x: number, y: number): void => {
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     const p = y * w + x;
     if (fg[p] === 0) return;       // already background
-    if (!isBg(x, y)) return;       // foreground edge → stop
+    if (!bgCol[p]) return;         // foreground edge → stop
     fg[p] = 0; stack.push(p);
   };
   for (let x = 0; x < w; x++) { visit(x, 0); visit(x, h - 1); }
@@ -37,7 +44,29 @@ export function extractSilhouette(rgba: Uint8Array, w: number, h: number, bgTole
     const p = stack.pop()!; const x = p % w, y = (p - x) / w;
     visit(x + 1, y); visit(x - 1, y); visit(x, y + 1); visit(x, y - 1);
   }
+  if (minHoleAreaFrac > 0) carveEnclosedHoles(fg, bgCol, w, h, Math.max(1, Math.floor(minHoleAreaFrac * w * h)));
   return { data: fg, w, h };
+}
+
+/** Flood-fill each connected component of enclosed bg-coloured pixels (still fg=1 after the border
+ *  fill); components with area ≥ minArea are carved to background. 4-connectivity; structural pixels
+ *  (bgCol=0) separate components. */
+function carveEnclosedHoles(fg: Uint8Array, bgCol: Uint8Array, w: number, h: number, minArea: number): void {
+  const seen = new Uint8Array(w * h);
+  for (let p0 = 0; p0 < w * h; p0++) {
+    if (!bgCol[p0] || fg[p0] === 0 || seen[p0]) continue;   // enclosed bg-colour, not yet labelled
+    const comp = [p0]; seen[p0] = 1;
+    for (let qi = 0; qi < comp.length; qi++) {
+      const p = comp[qi]; const x = p % w, y = (p - x) / w;
+      const push = (nx: number, ny: number): void => {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) return;
+        const np = ny * w + nx;
+        if (bgCol[np] && fg[np] === 1 && !seen[np]) { seen[np] = 1; comp.push(np); }
+      };
+      push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
+    }
+    if (comp.length >= minArea) for (const p of comp) fg[p] = 0;
+  }
 }
 
 /** Robust bbox: only count rows/cols with foreground coverage ≥ coverFrac × span → ignores
@@ -172,6 +201,10 @@ export interface CarveCfg {
   gridLong: number; bgTolerance: number; coverFrac: number;
   frontMaskMaxHeightFrac: number; cellFrac: number; signForward: 1 | -1;
   minPoints: number;
+  /** Opt-in (default 0): carve enclosed bg-coloured voids ≥ this fraction of image area back to holes
+   *  (see extractSilhouette). Set for open-lattice landmarks (STS crane) to stop the A-frame/truss/
+   *  portal from filling solid. */
+  minHoleAreaFrac?: number;
   perView?: Partial<Record<ViewKind, Orient>>;
 }
 

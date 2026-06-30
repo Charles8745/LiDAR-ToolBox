@@ -32,6 +32,16 @@ describe('extractSilhouette', () => {
     const m = extractSilhouette(rgba,w,h,40);
     expect(m.data[10*w+10]).toBe(1);
   });
+  it('with minHoleAreaFrac, carves a large enclosed bg hole but keeps a small speckle', () => {
+    const w=40,h=40;
+    const rgba = makeRgba(w,h,BG,[{x0:8,y0:8,x1:31,y1:31,color:[200,60,40]}]); // 24x24 solid fg
+    for (let y=12;y<=19;y++) for (let x=12;x<=19;x++){ const i=(y*w+x)*4; rgba[i]=BG[0]; rgba[i+1]=BG[1]; rgba[i+2]=BG[2]; } // 8x8 = 64px enclosed hole
+    const sp=(26*w+26)*4; rgba[sp]=BG[0]; rgba[sp+1]=BG[1]; rgba[sp+2]=BG[2]; // 1px enclosed speckle
+    const m = extractSilhouette(rgba,w,h,40, 0.01); // minArea = 0.01*1600 = 16px → 64px carved, 1px kept
+    expect(m.data[15*w+15]).toBe(0); // large hole → carved to background
+    expect(m.data[26*w+26]).toBe(1); // small speckle → kept solid
+    expect(m.data[9*w+9]).toBe(1);   // surrounding structure → still solid
+  });
 });
 
 describe('robustExtent', () => {

@@ -25,7 +25,10 @@ export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
   // top view was captured boom-vertical → rotate 270 (CCW) so boom lies on the x-axis matching side
   // (side has boom-tip on the left/uz=0; rotate 270 sends top-of-image → left). Baked from the 3 clean
   // required views (side/front/top); side2/stern/bottom set aside (same-handedness → mirror-union conflict).
-  起重機: { frontMaskMaxHeightFrac: 1.0, cellFrac: 0.024, perView: { top: { rotate: 270 } } },
+  // gridLong 320 = finer carve (resolves thin truss/leg members vs the 160 default); cellFrac tuned to
+  // ~2.7k pts for crisper detail. minHoleAreaFrac carves the open-lattice voids (A-frame triangle, truss
+  // gaps, leg portal) the flood-fill would otherwise fill solid — tuned post-bake by eyeballing.
+  起重機: { gridLong: 320, frontMaskMaxHeightFrac: 1.0, cellFrac: 0.021, minHoleAreaFrac: 0.0008, perView: { top: { rotate: 270 } } },
 };
 
 /** Filename keyword → view kind. Order matters: more-specific keywords first. */
@@ -40,10 +43,10 @@ export function classifyView(filename: string): ViewKind | null {
   return null;
 }
 
-export async function decodeMask(buf: Buffer, bgTolerance: number): Promise<Mask> {
+export async function decodeMask(buf: Buffer, bgTolerance: number, minHoleAreaFrac = 0): Promise<Mask> {
   const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const rgba = new Uint8Array(data.buffer, data.byteOffset, data.byteLength); // RGBA (ensureAlpha → 4ch)
-  return extractSilhouette(rgba, info.width, info.height, bgTolerance);
+  return extractSilhouette(rgba, info.width, info.height, bgTolerance, minHoleAreaFrac);
 }
 
 /** Decode every view in a category dir, crop, assemble axes (orient + union), carve → template points. */
@@ -54,7 +57,7 @@ export async function bakeCategory(viewsDir: string, cfg: CarveCfg): Promise<{ p
     if (!/\.(png|jpe?g|webp)$/i.test(f)) continue;
     const kind = classifyView(f);
     if (!kind) continue;
-    const raw = await decodeMask(await readFile(join(viewsDir, f)), cfg.bgTolerance);
+    const raw = await decodeMask(await readFile(join(viewsDir, f)), cfg.bgTolerance, cfg.minHoleAreaFrac ?? 0);
     byKind[kind] = cropToContent(raw, cfg.coverFrac);
   }
   const { side, top, front } = assembleAxes(byKind, cfg.perView);

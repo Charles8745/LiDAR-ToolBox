@@ -31,6 +31,17 @@ describe('decodeMask', () => {
     expect(m.data[10*20+10]).toBe(1);
     expect(m.data[0]).toBe(0);
   });
+  it('forwards minHoleAreaFrac so a large enclosed bg hole is carved', async () => {
+    const w=40,h=40; const raw=Buffer.alloc(w*h*3);
+    for (let i=0;i<w*h;i++){ raw[i*3]=168; raw[i*3+1]=184; raw[i*3+2]=188; } // bg
+    for (let y=8;y<=31;y++) for (let x=8;x<=31;x++){ const i=(y*w+x)*3; raw[i]=200; raw[i+1]=60; raw[i+2]=40; } // 24x24 fg
+    for (let y=12;y<=19;y++) for (let x=12;x<=19;x++){ const i=(y*w+x)*3; raw[i]=168; raw[i+1]=184; raw[i+2]=188; } // 8x8 enclosed hole
+    const png = await sharp(raw, { raw:{ width:w, height:h, channels:3 } }).png().toBuffer();
+    const carved = await decodeMask(png, 40, 0.01);
+    const kept = await decodeMask(png, 40);           // default 0 → hole stays filled
+    expect(carved.data[15*40+15]).toBe(0);
+    expect(kept.data[15*40+15]).toBe(1);
+  });
 });
 
 describe('VIEW_BAKE_CONFIG', () => {
@@ -39,5 +50,8 @@ describe('VIEW_BAKE_CONFIG', () => {
   });
   it('crane sets a density knob within budget', () => {
     expect(VIEW_BAKE_CONFIG['起重機']?.cellFrac).toBeGreaterThan(0);
+  });
+  it('crane carves enclosed lattice voids (A-frame/truss/portal hollow)', () => {
+    expect(VIEW_BAKE_CONFIG['起重機']?.minHoleAreaFrac).toBeGreaterThan(0);
   });
 });
