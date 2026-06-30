@@ -56,6 +56,30 @@ export function waterSideSign(center: World, tangentRad: number, land: World[], 
   return cPlus < cMinus ? 1 : -1;
 }
 
+/** Wharf tangent inferred from the crane ROW itself: PCA principal axis of crane[idx] + its `k` nearest
+ *  crane neighbours. Cranes line up along the quay, so neighbours give a clean, consistent wharf heading
+ *  (adjacent cranes → parallel) where the jagged OSM pier polylines do not. Returns the tangent (rad). */
+export function craneRowTangent(idx: number, centers: { x: number; z: number }[], k: number): number {
+  const c = centers[idx];
+  const near = centers
+    .map((p, i) => ({ p, i, d: (p.x - c.x) ** 2 + (p.z - c.z) ** 2 }))
+    .filter((o) => o.i !== idx)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, k)
+    .map((o) => o.p);
+  const pts = [c, ...near];
+  let mx = 0, mz = 0;
+  for (const p of pts) { mx += p.x; mz += p.z; }
+  mx /= pts.length; mz /= pts.length;
+  let sxx = 0, sxz = 0, szz = 0;
+  for (const p of pts) { const dx = p.x - mx, dz = p.z - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
+  const tr = sxx + szz, det = sxx * szz - sxz * sxz;
+  const l1 = tr / 2 + Math.sqrt(Math.max(0, (tr * tr) / 4 - det));   // larger eigenvalue
+  let vx = sxz, vz = l1 - sxx;                                       // its eigenvector
+  if (Math.abs(vx) < 1e-9 && Math.abs(vz) < 1e-9) { vx = 1; vz = 0; } // axis-aligned/degenerate → x
+  return Math.atan2(vz, vx);
+}
+
 /** Boom heading = nearest-pier tangent ± 90° toward water (or an explicit override sign). */
 export function craneBoomHeading(
   center: World, segs: Seg[], land: World[], opts: CraneOrientOpts, override?: 1 | -1,

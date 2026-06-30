@@ -28,7 +28,10 @@ export const VIEW_BAKE_CONFIG: Record<string, Partial<CarveCfg>> = {
   // gridLong 320 = finer carve (resolves thin truss/leg members vs the 160 default); cellFrac tuned to
   // ~2.7k pts for crisper detail. minHoleAreaFrac carves the open-lattice voids (A-frame triangle, truss
   // gaps, leg portal) the flood-fill would otherwise fill solid — tuned post-bake by eyeballing.
-  起重機: { gridLong: 320, frontMaskMaxHeightFrac: 1.0, cellFrac: 0.021, minHoleAreaFrac: 0.0008, perView: { top: { rotate: 270 } } },
+  // signForward -1: the carved boom cantilever lands on −x by default; flip so boom→+x, matching
+  // placeModelPoints (which aims the template +x at the baked water heading). Without this the boom
+  // points 180° away from water (head/tail reversed).
+  起重機: { gridLong: 320, frontMaskMaxHeightFrac: 1.0, cellFrac: 0.021, minHoleAreaFrac: 0.0008, signForward: -1, perView: { top: { rotate: 270 } } },
 };
 
 /** Filename keyword → view kind. Order matters: more-specific keywords first. */

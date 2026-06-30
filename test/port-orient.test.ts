@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPierSegs, nearestPierTangent, collectLandPoints, waterSideSign, craneBoomHeading,
+  craneRowTangent,
 } from '../examples/kaohsiung-port/scene/orient';
 import type { OsmGeometry } from '../examples/kaohsiung-port/data/osm';
 
@@ -64,5 +65,25 @@ describe('craneBoomHeading', () => {
   it('honours an explicit override sign', () => {
     const h = craneBoomHeading({ x: 0, z: 0 }, segs, land, { stepU: 5, probeR: 2 }, 1);
     expect(h).toBeCloseTo(Math.PI / 2, 6);
+  });
+});
+
+describe('craneRowTangent', () => {
+  it('returns the along-row direction for a horizontal crane row', () => {
+    const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 3, z: 0 }];
+    const h = craneRowTangent(1, c, 2);
+    expect(Math.abs(Math.sin(h))).toBeCloseTo(0, 1); // tangent along x
+    expect(Math.abs(Math.cos(h))).toBeCloseTo(1, 1);
+  });
+  it('returns the along-row direction for a vertical crane row', () => {
+    const c = [{ x: 0, z: 0 }, { x: 0, z: 1 }, { x: 0, z: 2 }, { x: 0, z: 3 }];
+    const h = craneRowTangent(1, c, 2);
+    expect(Math.abs(Math.cos(h))).toBeCloseTo(0, 1); // tangent along z
+    expect(Math.abs(Math.sin(h))).toBeCloseTo(1, 1);
+  });
+  it('uses only the k nearest, so a far perpendicular outlier does not skew the tangent', () => {
+    const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 1, z: 50 }];
+    const h = craneRowTangent(1, c, 2); // nearest 2 to #1 are the in-row neighbours
+    expect(Math.abs(Math.sin(h))).toBeCloseTo(0, 1); // still along x
   });
 });
