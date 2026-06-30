@@ -56,6 +56,20 @@ export function waterSideSign(center: World, tangentRad: number, land: World[], 
   return cPlus < cMinus ? 1 : -1;
 }
 
+/** Principal-axis angle (rad) of a point set via 2×2 covariance PCA. Undirected (±π ambiguous). */
+export function principalAxisAngle(pts: { x: number; z: number }[]): number {
+  let mx = 0, mz = 0;
+  for (const p of pts) { mx += p.x; mz += p.z; }
+  mx /= pts.length; mz /= pts.length;
+  let sxx = 0, sxz = 0, szz = 0;
+  for (const p of pts) { const dx = p.x - mx, dz = p.z - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
+  const tr = sxx + szz, det = sxx * szz - sxz * sxz;
+  const l1 = tr / 2 + Math.sqrt(Math.max(0, (tr * tr) / 4 - det));   // larger eigenvalue
+  let vx = sxz, vz = l1 - sxx;                                       // its eigenvector
+  if (Math.abs(vx) < 1e-9 && Math.abs(vz) < 1e-9) { vx = 1; vz = 0; } // axis-aligned/degenerate → x
+  return Math.atan2(vz, vx);
+}
+
 /** Wharf tangent inferred from the crane ROW itself: PCA principal axis of crane[idx] + its `k` nearest
  *  crane neighbours. Cranes line up along the quay, so neighbours give a clean, consistent wharf heading
  *  (adjacent cranes → parallel) where the jagged OSM pier polylines do not. Returns the tangent (rad). */
@@ -67,17 +81,50 @@ export function craneRowTangent(idx: number, centers: { x: number; z: number }[]
     .sort((a, b) => a.d - b.d)
     .slice(0, k)
     .map((o) => o.p);
-  const pts = [c, ...near];
-  let mx = 0, mz = 0;
-  for (const p of pts) { mx += p.x; mz += p.z; }
-  mx /= pts.length; mz /= pts.length;
-  let sxx = 0, sxz = 0, szz = 0;
-  for (const p of pts) { const dx = p.x - mx, dz = p.z - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
-  const tr = sxx + szz, det = sxx * szz - sxz * sxz;
-  const l1 = tr / 2 + Math.sqrt(Math.max(0, (tr * tr) / 4 - det));   // larger eigenvalue
-  let vx = sxz, vz = l1 - sxx;                                       // its eigenvector
-  if (Math.abs(vx) < 1e-9 && Math.abs(vz) < 1e-9) { vx = 1; vz = 0; } // axis-aligned/degenerate → x
-  return Math.atan2(vz, vx);
+  return principalAxisAngle([c, ...near]);
+}
+
+/** Boom heading from a hand-traced land/water boundary — the authoritative orientation source.
+ *  TANGENT: PCA of the `k` nearest boundary points → the true local quay tangent (fixes "skew"; the drawn
+ *  edge is the actual coastline, not an approximation).
+ *  WATER SIDE (which perpendicular) — two signals, because neither alone covers every crane:
+ *   • A crane clearly INLAND of the traced waterline (|signed offset| ≥ `strongOffset`) trusts GEOMETRY:
+ *     the across-quay displacement from the fitted edge points away from the crane → toward water. Robust
+ *     where aerial brightness is not (deep-set rows behind dark/varied container yards).
+ *   • A crane sitting ON or slightly OVER the waterline (small offset — its OSM point can land water-side of
+ *     the drawn line) can't trust that weak geometric sign, so it uses an OPEN-WATER RAY: integrate aerial
+ *     luminance along each perpendicular; the side that stays DARK over distance is the open channel.
+ *   • If that ray is itself ambiguous (both sides similar), fall back to the weak geometric hint.
+ *  `bright(x,z)` returns aerial luminance (lower = water). */
+export function boundaryBoomHeading(
+  center: { x: number; z: number },
+  boundary: { x: number; z: number }[],
+  bright: (x: number, z: number) => number,
+  opts: { k?: number; strongOffset?: number; probes?: number[]; rayMargin?: number } = {},
+): number {
+  const k = opts.k ?? 4;
+  const strongOffset = opts.strongOffset ?? 0.5;
+  const probes = opts.probes ?? [1.5, 3, 4.5];
+  const rayMargin = opts.rayMargin ?? 6;
+  const near = boundary
+    .map((p) => ({ p, d: (p.x - center.x) ** 2 + (p.z - center.z) ** 2 }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, Math.max(2, k));
+  const tangent = principalAxisAngle(near.map((o) => o.p));
+  let mx = 0, mz = 0;                                   // centroid of the nearest edge points = a stable
+  for (const o of near) { mx += o.p.x; mz += o.p.z; }   // point ON the waterline (robust to vertex spacing)
+  mx /= near.length; mz /= near.length;
+  const hPlus = tangent + Math.PI / 2, hMinus = tangent - Math.PI / 2;
+  const cpx = Math.cos(hPlus), cpz = Math.sin(hPlus);   // +perpendicular unit
+  // Signed across-quay offset of the crane from the fitted waterline (along-quay part cancels).
+  const signed = cpx * (center.x - mx) + cpz * (center.z - mz);
+  if (Math.abs(signed) >= strongOffset) return signed >= 0 ? hMinus : hPlus; // inland → geometry decides
+  // Near/over the waterline: open-water ray (mean luminance along each perpendicular from the edge point).
+  let aPlus = 0, aMinus = 0;
+  for (const t of probes) { aPlus += bright(mx + cpx * t, mz + cpz * t); aMinus += bright(mx - cpx * t, mz - cpz * t); }
+  aPlus /= probes.length; aMinus /= probes.length;
+  if (Math.abs(aPlus - aMinus) >= rayMargin) return aPlus <= aMinus ? hPlus : hMinus; // darker side = water
+  return signed >= 0 ? hMinus : hPlus;                  // ambiguous brightness → weak geometric hint
 }
 
 /** Boom heading = nearest-pier tangent ± 90° toward water (or an explicit override sign). */

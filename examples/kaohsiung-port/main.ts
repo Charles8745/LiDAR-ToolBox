@@ -301,6 +301,88 @@ canvas.addEventListener('click', (e) => {
   } else overlay.hideVessel();
 });
 
+// Dev tool: trace the land/water boundary by clicking along the coast. Each click raycasts onto the
+// basemap plane (y=0) → world (x,z), drops a red marker, and appends to the list. Drives the authoritative
+// land-sea-boundary.json that data/fetch-crane-orient.ts uses for crane boom orientation.
+// Usage in console: __twin.trace.start() → click the coast → __twin.trace.dump() → paste the JSON.
+const traceRay = new THREE.Raycaster();
+const trace = { on: false, pts: [] as { x: number; z: number }[], group: new THREE.Group() };
+engine.addLayer(trace.group);
+canvas.addEventListener('click', (e) => {
+  if (!trace.on) return;
+  e.stopImmediatePropagation();                       // suppress ship-pick while tracing
+  const rect = canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  traceRay.setFromCamera(ndc, engine.camera3D);
+  const hit = traceRay.intersectObject(mapPlane, false)[0];
+  if (!hit) return;
+  const x = +hit.point.x.toFixed(3), z = +hit.point.z.toFixed(3);
+  trace.pts.push({ x, z });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3344 }));
+  m.position.set(x, 0.6, z);
+  trace.group.add(m);
+  console.log(`[trace] +pt ${trace.pts.length}: (${x}, ${z})`);
+}, true);                                              // capture phase → runs before ship-pick
+
+// Dev tool: drop bright magenta pillars + index labels above chosen cranes (default = the boom-orientation
+// suspects) and frame the camera on them — to eyeball each boom's direction in 3D against the real water.
+// Usage in console: __twin.markCranes()  ·  __twin.markCranes(3,13,14,52)  ·  __twin.clearMarks()
+const markGroup = new THREE.Group();
+engine.addLayer(markGroup);
+const craneList = osm.cranes as { lat: number; lon: number }[];
+function numberSprite(n: number): THREE.Sprite {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 96;
+  const g = cv.getContext('2d')!;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, 96, 96);
+  g.fillStyle = '#ff5cff'; g.font = 'bold 60px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(n), 48, 52);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+  sp.scale.set(3, 3, 1);
+  return sp;
+}
+function markCranes(...idx: number[]): void {
+  const ids = idx.length ? idx : [3, 13, 14, 52];
+  while (markGroup.children.length) markGroup.remove(markGroup.children[0]);
+  const box = new THREE.Box3();
+  for (const i of ids) {
+    const w = proj.toWorld(craneList[i].lat, craneList[i].lon);
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff5cff, depthTest: false }),
+    );
+    pillar.position.set(w.x, 6, w.z);
+    markGroup.add(pillar);
+    const sp = numberSprite(i); sp.position.set(w.x, 13, w.z); markGroup.add(sp);
+    box.expandByPoint(new THREE.Vector3(w.x, 0, w.z));
+  }
+  const center = box.getCenter(new THREE.Vector3());
+  const span = Math.max(10, box.getSize(new THREE.Vector3()).length());
+  const ctrl = (engine as unknown as { controls?: { target?: THREE.Vector3 } }).controls;
+  if (ctrl?.target) ctrl.target.copy(center);
+  engine.camera3D.position.set(center.x + span, span, center.z + span);
+  engine.camera3D.lookAt(center);
+  console.log(`[mark] cranes ${ids.join(',')} — magenta pillars; orbit to inspect each boom vs the water`);
+}
+function clearMarks(): void { while (markGroup.children.length) markGroup.remove(markGroup.children[0]); }
+
+// Dev tool: float a small index number above EVERY crane so the numbers read directly in any camera view
+// (no north-up correlation needed). __twin.labelCranes()  ·  __twin.labelCranes(false) to hide.
+const labelGroup = new THREE.Group();
+engine.addLayer(labelGroup);
+function labelCranes(show = true): void {
+  while (labelGroup.children.length) labelGroup.remove(labelGroup.children[0]);
+  if (!show) { console.log('[label] cranes hidden'); return; }
+  craneList.forEach((ll, i) => {
+    const w = proj.toWorld(ll.lat, ll.lon);
+    const sp = numberSprite(i); sp.scale.set(2, 2, 1); sp.position.set(w.x, 9, w.z);
+    labelGroup.add(sp);
+  });
+  console.log(`[label] ${craneList.length} crane indices shown`);
+}
+
 // Dev/verification handles.
 (window as any).__twin = {
   engine, shipPC, mapPlane, updateShips, refresh,
@@ -309,4 +391,12 @@ canvas.addEventListener('click', (e) => {
   labels,
   get shipCenters() { return shipCenters; },
   setBasemapTint: (hex: number) => { (mapPlane.material as THREE.MeshBasicMaterial).color.setHex(hex); },
+  markCranes, clearMarks, labelCranes,
+  trace: {
+    start() { trace.on = true; console.log('[trace] ON — click along the coast; then __twin.trace.dump(). .undo() / .clear() / .stop()'); },
+    stop() { trace.on = false; console.log(`[trace] OFF (${trace.pts.length} pts)`); },
+    undo() { trace.pts.pop(); const c = trace.group.children.pop(); if (c) trace.group.remove(c); console.log(`[trace] ${trace.pts.length} pts`); },
+    clear() { trace.pts.length = 0; while (trace.group.children.length) trace.group.remove(trace.group.children[0]); console.log('[trace] cleared'); },
+    dump() { const s = JSON.stringify({ points: trace.pts }); console.log(s); return s; },
+  },
 };

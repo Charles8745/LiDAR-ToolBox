@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPierSegs, nearestPierTangent, collectLandPoints, waterSideSign, craneBoomHeading,
-  craneRowTangent,
+  craneRowTangent, boundaryBoomHeading,
 } from '../examples/kaohsiung-port/scene/orient';
 import type { OsmGeometry } from '../examples/kaohsiung-port/data/osm';
 
@@ -85,5 +85,45 @@ describe('craneRowTangent', () => {
     const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 1, z: 50 }];
     const h = craneRowTangent(1, c, 2); // nearest 2 to #1 are the in-row neighbours
     expect(Math.abs(Math.sin(h))).toBeCloseTo(0, 1); // still along x
+  });
+});
+
+describe('boundaryBoomHeading', () => {
+  // Coast along the x-axis (z=0). Tangent always comes from the boundary PCA. The water SIDE combines two
+  // signals: a clearly-inland crane (|offset| ≥ strongOffset) trusts geometry; a crane on/over the waterline
+  // (small offset) trusts an open-water brightness ray; ambiguous brightness falls back to the geometry hint.
+  const horiz = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 4, z: 0 }, { x: 6, z: 0 }, { x: 8, z: 0 }, { x: 10, z: 0 }];
+  it('clearly-inland crane → geometry decides, ignoring misleading brightness', () => {
+    const lying = (_x: number, z: number) => (z < 0 ? 255 : 0); // falsely calls the water (-z) side bright
+    const h = boundaryBoomHeading({ x: 5, z: 2 }, horiz, lying, { k: 4, strongOffset: 0.5 });
+    expect(h).toBeCloseTo(-Math.PI / 2, 5); // offset 2 ≥ strong → geometry: inland +z → boom toward -z
+  });
+  it('mirrors for an inland crane on the other side', () => {
+    const h = boundaryBoomHeading({ x: 5, z: -2 }, horiz, () => 0, { k: 4, strongOffset: 0.5 });
+    expect(h).toBeCloseTo(Math.PI / 2, 5);
+  });
+  it('vertical coast, clearly inland → boom perpendicular across the edge', () => {
+    const vert = [{ x: 0, z: 0 }, { x: 0, z: 2 }, { x: 0, z: 4 }, { x: 0, z: 6 }, { x: 0, z: 8 }];
+    const h = boundaryBoomHeading({ x: 2, z: 4 }, vert, () => 0, { k: 4, strongOffset: 0.5 });
+    expect(Math.cos(h)).toBeCloseTo(-1, 5); // boom toward -x
+    expect(Math.sin(h)).toBeCloseTo(0, 5);
+  });
+  it('uses only the k nearest boundary points for the tangent', () => {
+    const near = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 4, z: 0 }, { x: 6, z: 0 }]; // horizontal shore at origin
+    const far = [{ x: 20, z: 0 }, { x: 20, z: 2 }, { x: 20, z: 4 }, { x: 20, z: 6 }]; // vertical shore far in +x
+    const h = boundaryBoomHeading({ x: 3, z: 1 }, [...near, ...far], () => 0, { k: 4, strongOffset: 0.5 });
+    expect(Math.cos(h)).toBeCloseTo(0, 5);
+    expect(h).toBeCloseTo(-Math.PI / 2, 5);
+  });
+  it('crane on the water side of the line → open-water ray overrides the weak geometry hint', () => {
+    // signed +0.2 (barely +z) would geometrically aim -z, but the water IS on +z → the ray must win.
+    const water = (_x: number, z: number) => (z > 0 ? 0 : 255);
+    const h = boundaryBoomHeading({ x: 5, z: 0.2 }, horiz, water, { k: 4, strongOffset: 0.5 });
+    expect(h).toBeCloseTo(Math.PI / 2, 5); // toward +z water
+  });
+  it('weak offset with ambiguous brightness → geometric hint as last resort', () => {
+    const flat = () => 100;
+    const h = boundaryBoomHeading({ x: 5, z: 0.2 }, horiz, flat, { k: 4, strongOffset: 0.5 });
+    expect(h).toBeCloseTo(-Math.PI / 2, 5); // signed +0.2 → boom toward -z
   });
 });
