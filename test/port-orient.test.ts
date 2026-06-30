@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPierSegs, nearestPierTangent, collectLandPoints, waterSideSign, craneBoomHeading,
-  craneRowTangent, boundaryBoomHeading,
+  craneRowTangent, boundaryBoomHeading, principalAxis, craneRowAxis, waterwardPerp,
 } from '../examples/kaohsiung-port/scene/orient';
 import type { OsmGeometry } from '../examples/kaohsiung-port/data/osm';
 
@@ -85,6 +85,58 @@ describe('craneRowTangent', () => {
     const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 1, z: 50 }];
     const h = craneRowTangent(1, c, 2); // nearest 2 to #1 are the in-row neighbours
     expect(Math.abs(Math.sin(h))).toBeCloseTo(0, 1); // still along x
+  });
+});
+
+describe('principalAxis', () => {
+  it('collinear points → axis along the line + high linearity ratio', () => {
+    const r = principalAxis([{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 3, z: 0 }]);
+    expect(Math.abs(Math.sin(r.angle))).toBeCloseTo(0, 6); // along x
+    expect(r.ratio).toBeGreaterThan(100);                  // very linear
+  });
+  it('isotropic blob → ratio near 1', () => {
+    const r = principalAxis([{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: 1, z: 1 }]);
+    expect(r.ratio).toBeLessThan(2);
+  });
+  it('angle agrees with the legacy principalAxisAngle helper', () => {
+    const pts = [{ x: 0, z: 0 }, { x: 2, z: 1 }, { x: 4, z: 2 }];
+    expect(principalAxis(pts).angle).toBeCloseTo(Math.atan2(1, 2), 6);
+  });
+});
+
+describe('craneRowAxis', () => {
+  it('horizontal crane row → angle along x and high ratio', () => {
+    const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 3, z: 0 }];
+    const r = craneRowAxis(1, c, 2);
+    expect(Math.abs(Math.sin(r.angle))).toBeCloseTo(0, 1);
+    expect(r.ratio).toBeGreaterThan(100);
+  });
+  it('blob cluster → low ratio (signals the row is unreliable → caller falls back to boundary)', () => {
+    const c = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: 1, z: 1 }];
+    const r = craneRowAxis(0, c, 3);
+    expect(r.ratio).toBeLessThan(3);
+  });
+});
+
+describe('waterwardPerp', () => {
+  // horizontal coast (z=0); the two perpendiculars are +z (+π/2) and -z (-π/2).
+  const horiz = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 4, z: 0 }, { x: 6, z: 0 }];
+  it('brightness ray decides: darker side = water', () => {
+    const water = (_x: number, z: number) => (z > 0 ? 0 : 255); // +z dark = water
+    const h = waterwardPerp({ x: 3, z: -1 }, 0, horiz, water, { probes: [1, 2, 3], rayMargin: 6 });
+    expect(h).toBeCloseTo(Math.PI / 2, 6); // toward +z water
+  });
+  it('ambiguous brightness → geometry: water = side away from the boundary the crane sits behind', () => {
+    const flat = () => 100;
+    const h = waterwardPerp({ x: 3, z: 2 }, 0, horiz, flat, { probes: [1, 2, 3], rayMargin: 6 });
+    expect(h).toBeCloseTo(-Math.PI / 2, 6); // crane on +z (land) side → boom toward -z water
+  });
+  it('respects the given tangent (vertical coast → boom along ±x)', () => {
+    const vert = [{ x: 0, z: 0 }, { x: 0, z: 2 }, { x: 0, z: 4 }, { x: 0, z: 6 }];
+    const water = (x: number, _z: number) => (x < 0 ? 0 : 255); // -x dark = water
+    const h = waterwardPerp({ x: 1, z: 3 }, Math.PI / 2, vert, water, { probes: [1, 2, 3], rayMargin: 6 });
+    expect(Math.cos(h)).toBeCloseTo(-1, 6); // toward -x
+    expect(Math.sin(h)).toBeCloseTo(0, 6);
   });
 });
 

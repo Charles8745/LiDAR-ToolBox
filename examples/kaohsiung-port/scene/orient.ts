@@ -56,24 +56,33 @@ export function waterSideSign(center: World, tangentRad: number, land: World[], 
   return cPlus < cMinus ? 1 : -1;
 }
 
-/** Principal-axis angle (rad) of a point set via 2×2 covariance PCA. Undirected (±π ambiguous). */
-export function principalAxisAngle(pts: { x: number; z: number }[]): number {
+/** Principal axis of a point set via 2×2 covariance PCA: direction `angle` (rad, undirected/±π ambiguous)
+ *  plus linearity `ratio` = λ1/λ2 (≫1 ⇒ points lie on a clean line; ≈1 ⇒ isotropic blob, axis meaningless).
+ *  The ratio lets a caller tell a real crane ROW from a tight cluster and pick its tangent source accordingly. */
+export function principalAxis(pts: { x: number; z: number }[]): { angle: number; ratio: number } {
   let mx = 0, mz = 0;
   for (const p of pts) { mx += p.x; mz += p.z; }
   mx /= pts.length; mz /= pts.length;
   let sxx = 0, sxz = 0, szz = 0;
   for (const p of pts) { const dx = p.x - mx, dz = p.z - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
   const tr = sxx + szz, det = sxx * szz - sxz * sxz;
-  const l1 = tr / 2 + Math.sqrt(Math.max(0, (tr * tr) / 4 - det));   // larger eigenvalue
-  let vx = sxz, vz = l1 - sxx;                                       // its eigenvector
+  const disc = Math.sqrt(Math.max(0, (tr * tr) / 4 - det));
+  const l1 = tr / 2 + disc, l2 = tr / 2 - disc;                      // eigenvalues (l1 ≥ l2 ≥ 0)
+  let vx = sxz, vz = l1 - sxx;                                       // eigenvector of l1
   if (Math.abs(vx) < 1e-9 && Math.abs(vz) < 1e-9) { vx = 1; vz = 0; } // axis-aligned/degenerate → x
-  return Math.atan2(vz, vx);
+  return { angle: Math.atan2(vz, vx), ratio: l2 > 1e-9 ? l1 / l2 : Infinity };
 }
 
-/** Wharf tangent inferred from the crane ROW itself: PCA principal axis of crane[idx] + its `k` nearest
- *  crane neighbours. Cranes line up along the quay, so neighbours give a clean, consistent wharf heading
- *  (adjacent cranes → parallel) where the jagged OSM pier polylines do not. Returns the tangent (rad). */
-export function craneRowTangent(idx: number, centers: { x: number; z: number }[], k: number): number {
+/** Principal-axis angle (rad) of a point set. Undirected (±π ambiguous). */
+export function principalAxisAngle(pts: { x: number; z: number }[]): number {
+  return principalAxis(pts).angle;
+}
+
+/** Wharf axis inferred from the crane ROW itself: PCA of crane[idx] + its `k` nearest crane neighbours.
+ *  Cranes line up along the quay, so neighbours give a clean, consistent wharf tangent (adjacent cranes →
+ *  parallel) where the jagged OSM piers / sparse hand-traced boundary do not. Returns {angle, ratio}; the
+ *  ratio is low when the cranes form a tight cluster rather than a line (caller should then fall back). */
+export function craneRowAxis(idx: number, centers: { x: number; z: number }[], k: number): { angle: number; ratio: number } {
   const c = centers[idx];
   const near = centers
     .map((p, i) => ({ p, i, d: (p.x - c.x) ** 2 + (p.z - c.z) ** 2 }))
@@ -81,7 +90,42 @@ export function craneRowTangent(idx: number, centers: { x: number; z: number }[]
     .sort((a, b) => a.d - b.d)
     .slice(0, k)
     .map((o) => o.p);
-  return principalAxisAngle([c, ...near]);
+  return principalAxis([c, ...near]);
+}
+
+/** Wharf tangent from the crane row (angle only — see craneRowAxis). */
+export function craneRowTangent(idx: number, centers: { x: number; z: number }[], k: number): number {
+  return craneRowAxis(idx, centers, k).angle;
+}
+
+/** Of the two perpendiculars to a given quay `tangent` at `center`, the WATER-ward one (the boom direction).
+ *  Primary signal: an open-water brightness ray — integrate aerial luminance along each perpendicular; the
+ *  side that stays DARK is open water. If the two sides are too similar (< `rayMargin`), fall back to GEOMETRY:
+ *  water is the side AWAY from the nearest hand-traced boundary points (the crane sits on the land side of the
+ *  waterline). Decoupling the tangent from the side lets the caller source the tangent from the crane row. */
+export function waterwardPerp(
+  center: { x: number; z: number },
+  tangent: number,
+  boundary: { x: number; z: number }[],
+  bright: (x: number, z: number) => number,
+  opts: { probes?: number[]; rayMargin?: number } = {},
+): number {
+  const probes = opts.probes ?? [2, 4, 6, 8];
+  const rayMargin = opts.rayMargin ?? 6;
+  const hPlus = tangent + Math.PI / 2, hMinus = tangent - Math.PI / 2;
+  const cpx = Math.cos(hPlus), cpz = Math.sin(hPlus);                // +perpendicular unit
+  let aPlus = 0, aMinus = 0;
+  for (const t of probes) { aPlus += bright(center.x + cpx * t, center.z + cpz * t); aMinus += bright(center.x - cpx * t, center.z - cpz * t); }
+  aPlus /= probes.length; aMinus /= probes.length;
+  if (Math.abs(aPlus - aMinus) >= rayMargin) return aPlus <= aMinus ? hPlus : hMinus; // darker = water
+  // Ambiguous brightness → geometry: signed across-quay offset from the nearest boundary centroid.
+  const k = Math.min(4, boundary.length);
+  const near = boundary.map((p) => ({ p, d: (p.x - center.x) ** 2 + (p.z - center.z) ** 2 })).sort((a, b) => a.d - b.d).slice(0, k);
+  let mx = 0, mz = 0;
+  for (const o of near) { mx += o.p.x; mz += o.p.z; }
+  mx /= near.length; mz /= near.length;
+  const signed = cpx * (center.x - mx) + cpz * (center.z - mz);
+  return signed >= 0 ? hMinus : hPlus;                              // crane on +side ⇒ water is −side
 }
 
 /** Boom heading from a hand-traced land/water boundary — the authoritative orientation source.
