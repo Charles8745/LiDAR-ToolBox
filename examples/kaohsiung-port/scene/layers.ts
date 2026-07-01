@@ -4,7 +4,7 @@ import type { Projection, World } from '../geo/projection';
 import type { OsmGeometry, Polyline, LatLon } from '../data/osm';
 import { samplePolyline } from './portPoints';
 import { footprintCentroidRadius, sampleCylinderShell, sampleGantry, sampleZoneRing } from './landmarks';
-import { loadLandmarkModel, loadLandmarkOrient, buildModelInstances } from './landmarkModels';
+import { loadLandmarkModel, loadLandmarkOrient, buildModelInstances, buildScaledInstances, templateHorizontalRadius } from './landmarkModels';
 import { buildPierSegs, collectLandPoints } from './orient';
 
 export type LayerKind = 'line' | 'cylinder' | 'gantry' | 'zone' | 'model';
@@ -44,6 +44,7 @@ export interface LayerConfig {
   // model (carved landmark template instanced at each `source` point)
   modelKey?: string; scaleU?: number; orientStepU?: number; orientProbeR?: number;
   headingOverrides?: Record<number, 1 | -1>;
+  scaleByFootprint?: boolean; // model 層:來源為 Polyline[] footprint,每座依半徑縮放、免定向(儲槽)
 }
 
 export interface LayerHandle {
@@ -81,8 +82,28 @@ export function buildLayerPoints(cfg: LayerConfig, osm: OsmGeometry, proj: Proje
       }));
     }
   } else if (cfg.kind === 'model') {
-    const cranePts = raw as LatLon[];
     const tpl = cfg.modelKey ? loadLandmarkModel(cfg.modelKey) : null;
+    if (cfg.scaleByFootprint) {
+      // 徑向對稱靜態地物(儲槽):來源為封閉 footprint 多邊形,每座取中心+半徑,依半徑縮放、免定向。
+      const polys = raw as Polyline[];
+      if (!tpl) { // 無模板 → fallback 回程序圓柱殼(維持現況外觀)
+        for (const poly of polys) {
+          const { center, radius } = footprintCentroidRadius(poly.map((l) => toWorld(proj, l)));
+          out.push(...sampleCylinderShell(center, radius, cfg.baseY, cfg.height ?? 0.3, cfg.rings ?? 6, cfg.perRing ?? 32));
+        }
+        return out;
+      }
+      const thr = templateHorizontalRadius(tpl);
+      const centers: World[] = [];
+      const scales: number[] = [];
+      for (const poly of polys) {
+        const { center, radius } = footprintCentroidRadius(poly.map((l) => toWorld(proj, l)));
+        centers.push(center);
+        scales.push(radius / thr);
+      }
+      return buildScaledInstances(tpl, centers, scales, cfg.baseY);
+    }
+    const cranePts = raw as LatLon[];
     if (!tpl) { // no baked template → fall back to procedural gantry wireframe
       for (const pt of cranePts) {
         out.push(...sampleGantry(toWorld(proj, pt), cfg.baseY, {

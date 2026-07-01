@@ -93,3 +93,24 @@ describe('buildLayers', () => {
     expect(u.uPulseHz.value).toBe(2);
   });
 });
+
+describe('buildLayerPoints kind:model scaleByFootprint(儲槽)', () => {
+  const idProj = { toWorld: (lat: number, lon: number) => ({ x: lon, z: lat }) } as any;
+  const square = (cx: number, cz: number, r: number) => [
+    { lat: cz - r, lon: cx - r }, { lat: cz - r, lon: cx + r },
+    { lat: cz + r, lon: cx + r }, { lat: cz + r, lon: cx - r }, { lat: cz - r, lon: cx - r },
+  ];
+  const osm = { coastline: [], piers: [], breakwater: [], tanks: [square(0, 0, 1), square(50, 50, 2)], cranes: [], anchorages: [] } as any;
+  const cfg = {
+    key: 'tank', label: '儲槽', source: 'tanks', kind: 'model', modelKey: '儲槽', scaleByFootprint: true,
+    color: [1, 1, 1], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,
+  } as any;
+  it('每座 footprint 產生一份縮放後的模板點雲(非空、xyz 對齊)', () => {
+    const pts = buildLayerPoints(cfg, osm, idProj);
+    expect(pts.length).toBeGreaterThan(0);
+    expect(pts.length % 3).toBe(0);
+    // 每座輸出 = 模板全部點(Float32Array 長度);2 座 → 2 × 模板點數
+    const tplLen = loadLandmarkModel('儲槽')!.points.length;
+    expect(pts.length).toBe(2 * tplLen);
+  });
+});
