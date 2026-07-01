@@ -43,6 +43,9 @@ const MODEL_BAKE_CONFIG: Record<string, Partial<BakeCfg>> = {
   軍艦: { forwardAxis: 'z', cellFrac: 0.014 },
   // 遊艇 (CC-BY-NC yacht): length-along-z; cellFrac 0.024 → ~1237 pts (kept under 1500 budget).
   遊艇: { forwardAxis: 'z', cellFrac: 0.024 },
+  // 儲槽 (CC-BY-4.0 Process Storage Tank): 徑向對稱靜態地物,免定向。upAxis=垂直軸讓槽站直、
+  // 水平切片成環;forwardAxis=任一水平軸。cellFrac 起手 0.03,依瀏覽器目視微調點數。
+  儲槽: { forwardAxis: 'x', upAxis: 'y', cellFrac: 0.06 },
 };
 
 function parseGlb(buf: ArrayBuffer): Promise<Group> {
