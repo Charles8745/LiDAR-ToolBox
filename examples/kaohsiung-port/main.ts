@@ -91,7 +91,7 @@ const LAYERS: LayerConfig[] = [
   // Tier: landmarks (3D) — neutral steel grey, distinguished by 3D shape not colour (blue is now
   // a ship colour). Low glow (bloom group 4). Anchorage is structure-tier (bloom group 3).
   // 世界單位尺寸 × S(=WORLD_SCALE/0.01)自動等比;pointSize/rings/perRing/ringCount 不變(像素/計數)。
-  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'cylinder', color: [118, 128, 142], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,       height: 0.3 * S, rings: 6, perRing: 32, brightness: 0.9 },
+  { key: 'tank',       label: '儲槽',   source: 'tanks',      kind: 'model',    color: [118, 128, 142], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,       modelKey: '儲槽', scaleByFootprint: true, height: 0.3 * S, rings: 6, perRing: 32, brightness: 0.9 },
   // 起重機圖層已隱藏(使用者要求場景不顯示起重機)。模型程式碼/資料/烘焙工具(landmarkModels、orient、
   // crane-orient.json、起重機.json、port:crane-orient)皆保留;要復原把下一行取消註解即可。
   // { key: 'crane',      label: '起重機', source: 'cranes',     kind: 'model',    color: [138, 150, 166], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,       modelKey: 'crane', scaleU: 1.0 * S, orientStepU: 1.5 * S, orientProbeR: 1.5 * S, legHeight: 0.6 * S, baseW: 0.4 * S, baseD: 0.4 * S, boomLen: 0.5 * S, spacing: 0.05 * S },
