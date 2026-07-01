@@ -112,5 +112,6 @@ describe('buildLayerPoints kind:model scaleByFootprint(儲槽)', () => {
     // 每座輸出 = 模板全部點(Float32Array 長度);2 座 → 2 × 模板點數
     const tplLen = loadLandmarkModel('儲槽')!.points.length;
     expect(pts.length).toBe(2 * tplLen);
+    expect(pts.every(Number.isFinite)).toBe(true); // gate: NaN path (Polyline[] miscast) would fail here
   });
 });
