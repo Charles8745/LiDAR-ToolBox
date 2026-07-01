@@ -83,11 +83,20 @@ async function run() {
   }
   svg += `</svg>`;
   const composed = await sharp(buf).composite([{ input: Buffer.from(svg), top: 0, left: 0 }]).png().toBuffer();
-  await sharp(composed).resize(1400).toFile(join(HERE, '_tank-overlay-full.png'));
-  // 兩個放大裁切,細看儲槽群是否對齊(座標依 basemap 2560×3072;必要時自行調整)
-  await sharp(composed).extract({ left: 1700, top: 1400, width: 700, height: 700 }).resize(900).toFile(join(HERE, '_tank-overlay-a.png'));
-  await sharp(composed).extract({ left: 1900, top: 2000, width: 700, height: 700 }).resize(900).toFile(join(HERE, '_tank-overlay-b.png'));
-  console.log(`ok ${W}x${H}, tanks=${tanks.length}`);
+  // 自動依所有儲槽的像素 bbox 裁切(不論儲槽群在圖上哪裡都框得到),另存一張全圖。
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  for (const poly of tanks) {
+    const { center } = footprintCentroidRadius(poly.map((l) => proj.toWorld(l.lat, l.lon)));
+    const p = px(center.x, center.z);
+    minX = Math.min(minX, p.X); maxX = Math.max(maxX, p.X);
+    minY = Math.min(minY, p.Y); maxY = Math.max(maxY, p.Y);
+  }
+  const m = 120;
+  const L = Math.max(0, Math.floor(minX - m)), T = Math.max(0, Math.floor(minY - m));
+  const Wc = Math.min(W - L, Math.ceil(maxX - minX + 2 * m)), Hc = Math.min(H - T, Math.ceil(maxY - minY + 2 * m));
+  await sharp(composed).resize(1600).toFile(join(HERE, '_tank-overlay-full.png'));
+  await sharp(composed).extract({ left: L, top: T, width: Wc, height: Hc }).resize(1200).toFile(join(HERE, '_tank-overlay-zoom.png'));
+  console.log(`ok ${W}x${H}, tanks=${tanks.length}, crop ${L},${T} ${Wc}x${Hc}`);
 }
 run().catch((e) => { console.error(e); process.exit(1); });
 ```
@@ -95,18 +104,18 @@ run().catch((e) => { console.error(e); process.exit(1); });
 - [ ] **Step 4: 執行診斷**
 
 Run: `npx vite-node _tank-check.ts`
-Expected: `ok 2560x3072, tanks=<N>`,並產生 `_tank-overlay-full.png` / `-a.png` / `-b.png`。
+Expected: `ok 2560x3072, tanks=<N>, crop ...`,並產生 `_tank-overlay-full.png`(全圖)/ `_tank-overlay-zoom.png`(自動框到儲槽群的放大圖)。
 
 - [ ] **Step 5: 目視核對**
 
-用 Read 工具開啟 `_tank-overlay-full.png` 與兩張裁切。確認綠圈(OSM 儲槽輪廓)絕大多數落在航照可見的圓形儲槽上、無系統性偏移。
+用 Read 工具開啟 `_tank-overlay-full.png` 與 `_tank-overlay-zoom.png`。確認綠圈(OSM 儲槽輪廓)絕大多數落在航照可見的圓形儲槽上、無系統性偏移。
 - 通過 → 繼續。
 - **若大量錯位/漏標/幻影 → STOP,把疊圖與問題回報使用者再決定**(不自行改座標)。
 
 - [ ] **Step 6: 清除暫存並 commit 已驗證的 OSM**
 
 ```bash
-rm -f _tank-check.ts _tank-overlay-full.png _tank-overlay-a.png _tank-overlay-b.png
+rm -f _tank-check.ts _tank-overlay-full.png _tank-overlay-zoom.png
 git add examples/kaohsiung-port/data/osm-khh.json
 git commit -m "chore(port): 重抓 OSM 快照並疊航照核對儲槽位置(位置驗證通過)"
 ```
@@ -169,8 +178,8 @@ for (const t of tris) for (const v of [t.a,t.b,t.c]) { mnx=Math.min(mnx,v.x);mny
 console.log('span x',(mxx-mnx).toFixed(2),'y',(mxy-mny).toFixed(2),'z',(mxz-mnz).toFixed(2));
 ```
 Run: `npx vite-node _axes.ts`
-判定準則:**span 最大的那個軸最可能是圓柱高度(垂直)→ 設 `upAxis` = 該軸**(若三軸相近,儲槽偏矮,則垂直軸通常是 Sketchfab 慣例的 `y`);`forwardAxis` 設「另一個水平軸」(徑向對稱,選哪個都行,但別跟 upAxis 相同)。記下結果,`rm _axes.ts`。
-> 注意:`collectTriangles` 回傳的三角形頂點型別以實際 `meshTriangles.ts` 為準;若欄位非 `.a/.b/.c/.x/.y/.z`,依該檔調整取值(僅影響這支一次性量測腳本)。
+判定準則:圓柱是徑向對稱 → **兩個水平軸 span 會相近(= 直徑),第三軸是高度(垂直)→ 設 `upAxis` = 那個「與另兩軸不同」的高度軸**(高槽=最大軸;矮槽=最小軸;Sketchfab 慣例多為 `y`)。`forwardAxis` 設任一水平軸(即兩個相近軸之一,別跟 upAxis 相同)。記下結果,`rm _axes.ts`。
+>(`collectTriangles` 回傳 `Triangle{a,b,c}` 各 `{x,y,z}`,上述腳本欄位已對,直接可跑。)
 
 - [ ] **Step 4: 加烘焙設定**
 
@@ -196,8 +205,9 @@ Run:
 ```bash
 node -e "const t=require('./examples/kaohsiung-port/data/ship-models/儲槽.json');const p=t.points;let mnx=1e9,mny=1e9,mnz=1e9,mxx=-1e9,mxy=-1e9,mxz=-1e9;for(let i=0;i<p.length;i+=3){mnx=Math.min(mnx,p[i]);mxx=Math.max(mxx,p[i]);mny=Math.min(mny,p[i+1]);mxy=Math.max(mxy,p[i+1]);mnz=Math.min(mnz,p[i+2]);mxz=Math.max(mxz,p[i+2]);}console.log('pts',t.count,'spanx',(mxx-mnx).toFixed(3),'spany',(mxy-mny).toFixed(3),'spanz',(mxz-mnz).toFixed(3),'miny',mny.toFixed(3));"
 ```
-Expected(站直、貼地):`miny ≈ 0`;`spanx ≈ 1`(forwardAxis 被正規化成 1);`spany`/`spanz` 為合理比例(高度/直徑)。`pts` 落在 ~300–1000。
-- 若 `miny` 遠離 0 或槽比例明顯躺平(spany 極小而 spanz≈1)→ upAxis 判錯,回 Step 4 改軸重烘。
+Expected(站直、貼地):`miny ≈ 0`;**`spanx ≈ 1` 且 `spanz ≈ 1`**(兩個水平直徑,normalizeToUnit 把 forwardAxis 正規化成 1,另一水平軸也≈1);**`spany` = 高徑比**(高槽 >1、矮槽 <1,是三軸中唯一的奇異值)。`pts` 落在 ~300–1000。
+- **若 `spany ≈ 1` 而是某個水平軸變成奇異值 → upAxis 判錯、槽躺平** → 回 Step 4 改軸重烘。
+- 若 `miny` 明顯不為 0 → upAxis 方向/正規化異常,檢查軸設定。
 - 若 pts 太多/太少 → 調 `cellFrac`(大=少、小=多)重烘。
 
 - [ ] **Step 7: Commit**
@@ -224,10 +234,13 @@ git commit -m "feat(port): 烘焙圓柱儲槽 GLB → ship-models/儲槽.json"
 
 - [ ] **Step 1: 寫失敗測試**
 
-在 `test/port-landmark-models.test.ts` 檔尾加:
+先把檔頭既有 import 補上兩個名稱:
 ```ts
-import { buildScaledInstances, templateHorizontalRadius } from '../examples/kaohsiung-port/scene/landmarkModels';
-
+// 原本:import { loadLandmarkModel, buildModelInstances } from '../examples/kaohsiung-port/scene/landmarkModels';
+import { loadLandmarkModel, buildModelInstances, buildScaledInstances, templateHorizontalRadius } from '../examples/kaohsiung-port/scene/landmarkModels';
+```
+再在檔尾加測試(不要再另開 import 行):
+```ts
 describe('templateHorizontalRadius', () => {
   it('回傳水平面(x,z)最大半徑,忽略 y', () => {
     const tpl = { points: new Float32Array([3, 0, 4, /* r=5 */ 1, 9, 1 /* r≈1.41 */]) };
@@ -321,10 +334,8 @@ git commit -m "feat(port): landmarkModels 加 buildScaledInstances/templateHoriz
 
 - [ ] **Step 1: 寫失敗測試**
 
-在 `test/port-layers.test.ts` 檔尾加:
+在 `test/port-layers.test.ts` 檔尾加(`buildLayerPoints`、`loadLandmarkModel`、`LayerConfig` 該檔**已 import**,勿重複):
 ```ts
-import { buildLayerPoints } from '../examples/kaohsiung-port/scene/layers';
-
 describe('buildLayerPoints kind:model scaleByFootprint(儲槽)', () => {
   const idProj = { toWorld: (lat: number, lon: number) => ({ x: lon, z: lat }) } as any;
   const square = (cx: number, cz: number, r: number) => [
@@ -340,9 +351,9 @@ describe('buildLayerPoints kind:model scaleByFootprint(儲槽)', () => {
     const pts = buildLayerPoints(cfg, osm, idProj);
     expect(pts.length).toBeGreaterThan(0);
     expect(pts.length % 3).toBe(0);
-    // 2 座 × 模板點數 × 3
-    const tplPts = require('../examples/kaohsiung-port/data/ship-models/儲槽.json').count;
-    expect(pts.length).toBe(2 * tplPts * 3);
+    // 每座輸出 = 模板全部點(Float32Array 長度);2 座 → 2 × 模板點數
+    const tplLen = loadLandmarkModel('儲槽')!.points.length;
+    expect(pts.length).toBe(2 * tplLen);
   });
 });
 ```
@@ -389,7 +400,7 @@ import { loadLandmarkModel, loadLandmarkOrient, buildModelInstances, buildScaled
     const cranePts = raw as LatLon[];
     if (!tpl) { // no baked template → fall back to procedural gantry wireframe
 ```
-   —— 即在既有 crane 路徑(`const cranePts = raw as LatLon[];` 起)之前插入 footprint 分支;crane 路徑保持不變(把原本 `const tpl = ...` 那行移到分支開頭共用,原位置移除)。
+   —— **現況行序**:`else if (cfg.kind === 'model')` 之後,實際是 `const cranePts = raw as LatLon[];` **在前**、`const tpl = ...` 在後。**重構三步**:(1) 把 `const tpl = cfg.modelKey ? loadLandmarkModel(cfg.modelKey) : null;` 移到分支**最開頭**;(2) 緊接插入上面的 `if (cfg.scaleByFootprint) { ... }`(內含無模板 fallback 與兩個 `return`);(3) 原 `const cranePts = raw as LatLon[];` 移到 footprint 區塊**之後**、既有 `if (!tpl)` gantry fallback 之前。crane 路徑其餘完全不動。
 
 - [ ] **Step 4: 跑測試看它通過**
 
