@@ -105,7 +105,7 @@ describe('buildLayerPoints kind:model scaleByFootprint(儲槽)', () => {
     key: 'tank', label: '儲槽', source: 'tanks', kind: 'model', modelKey: '儲槽', scaleByFootprint: true,
     color: [1, 1, 1], pointSize: 2, maxPointSize: 4, bloomGroup: 4, baseY: 0,
   } as any;
-  it('每座 footprint 產生一份縮放後的模板點雲(非空、xyz 對齊)', () => {
+  it('每座 footprint 產生一份模板點雲(非空、點數=2×模板、座標皆有限值)', () => {
     const pts = buildLayerPoints(cfg, osm, idProj);
     expect(pts.length).toBeGreaterThan(0);
     expect(pts.length % 3).toBe(0);
