@@ -65,5 +65,12 @@ This work is based on **"Frickie's Yacht"**
 by **KurumA** (https://sketchfab.com/rubenn) licensed under **CC-BY-NC-4.0**
 (http://creativecommons.org/licenses/by-nc/4.0/).
 
+## 儲槽 (Storage Tank, cylinder) → `../ship-models/儲槽.json`
+
+This work is based on **"Process Storage Tank"**
+(https://sketchfab.com/3d-models/process-storage-tank-f3455e3692664237ae3ddf4c28932b43)
+by **Deepak Singh** (https://sketchfab.com/dy4in) licensed under **CC-BY-4.0**
+(http://creativecommons.org/licenses/by/4.0/).
+
 Baked via `npm run port:models` (geometry-only contour-slice + voxel sampling →
 normalized templates; textures/materials stripped before sampling).
